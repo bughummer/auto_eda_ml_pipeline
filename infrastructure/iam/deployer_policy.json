@@ -1,0 +1,155 @@
+{
+  "Comment": "Permissions for the person or CI role running `make deploy-aws` (scripts/deploy_aws.sh), and, separately, whoever launches the EC2 host that runs docker compose. This is NOT one of the three runtime roles (MlFactoryBackendRole / MlFactoryWorkflowRole / MlFactoryJobRole) defined in backend_role_policy.json, workflow_role_policy.json and job_role_policy.json - those are what the running platform uses; this is what the operator's own AWS identity needs to stand the platform up. Replace every ${...} placeholder with your account id, region, stack name and bucket names before attaching. ecr:GetAuthorizationToken and kms:CreateKey must keep Resource '*' - IAM does not support resource-level restriction for either action.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployAndInspectTheStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:GetTemplate",
+        "cloudformation:ListStackResources",
+        "cloudformation:ValidateTemplate"
+      ],
+      "Resource": "arn:aws:cloudformation:${AWS_REGION}:${AWS_ACCOUNT_ID}:stack/${STACK_NAME}/*"
+    },
+    {
+      "Sid": "CreateTheThreeRuntimeRolesAndInstanceProfile",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile"
+      ],
+      "Resource": [
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryBackendRole",
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryWorkflowRole",
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryJobRole",
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:instance-profile/MlFactoryBackendInstanceProfile"
+      ]
+    },
+    {
+      "Sid": "LetCloudFormationHandTheRolesToStepFunctionsAndSageMaker",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryBackendRole",
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryWorkflowRole",
+        "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryJobRole"
+      ]
+    },
+    {
+      "Sid": "ArtifactBucketAndKmsKey",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetBucketPolicy",
+        "s3:GetEncryptionConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::${ARTIFACT_BUCKET}"
+    },
+    {
+      "Sid": "KmsKeyForTheArtifactBucket",
+      "Effect": "Allow",
+      "Action": [
+        "kms:CreateKey",
+        "kms:CreateAlias",
+        "kms:DescribeKey",
+        "kms:PutKeyPolicy",
+        "kms:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "UploadWorkflowDefinitions",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::${DEFINITIONS_BUCKET}",
+        "arn:aws:s3:::${DEFINITIONS_BUCKET}/ml-factory/stepfunctions/*"
+      ]
+    },
+    {
+      "Sid": "BuildAndPushTheJobImage",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories",
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:SetRepositoryPolicy",
+        "ecr:PutImageScanningConfiguration"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateTheStateMachines",
+      "Effect": "Allow",
+      "Action": [
+        "states:CreateStateMachine",
+        "states:UpdateStateMachine",
+        "states:DescribeStateMachine",
+        "states:TagResource"
+      ],
+      "Resource": [
+        "arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:ml-factory-eda",
+        "arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:ml-factory-training"
+      ]
+    },
+    {
+      "Sid": "WorkflowLogGroup",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:DescribeLogGroups", "logs:PutRetentionPolicy"],
+      "Resource": "arn:aws:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/aws/vendedlogs/states/ml-factory*"
+    },
+    {
+      "Sid": "LaunchTheControlPlaneHost",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RunInstances",
+        "ec2:TerminateInstances",
+        "ec2:DescribeInstances",
+        "ec2:CreateTags",
+        "ec2:CreateSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AttachTheInstanceProfileWhenLaunching",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryBackendRole",
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" }
+      }
+    }
+  ]
+}

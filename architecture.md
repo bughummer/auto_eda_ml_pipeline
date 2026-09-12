@@ -323,13 +323,21 @@ Single error envelope for the whole API:
 
 ## 11. Security
 
-* IAM: three roles — `MlFactoryBackendRole` (control plane: `states:StartExecution`,
+* IAM: three **runtime** roles — the platform's own credentials, never assumed by hand —
+  `MlFactoryBackendRole` (control plane: `states:StartExecution`,
   `states:DescribeExecution`, `s3:GetObject/PutObject` limited to the artifact prefix, `s3:ListBucket`/`GetObject` on approved dataset buckets,
   `bedrock:InvokeModel` on allow-listed model ids),
   `MlFactoryWorkflowRole` (Step Functions: create/describe SageMaker jobs, `iam:PassRole` to
   the job role, `s3:PutObject` limited to `…/experiments/*/state/*`),
   `MlFactoryJobRole` (SageMaker containers: read approved dataset prefixes, read/write the
   experiment artifact prefix, CloudWatch Logs). Policies in `infrastructure/iam/`.
+  `MlFactoryBackendRole` doubles as an EC2 instance profile
+  (`MlFactoryBackendInstanceProfile`), so the host running `docker compose` gets these
+  credentials from the instance metadata service with nothing to configure and nothing to
+  rotate — see `infrastructure/README.md`. Separate from all three: `iam/deployer_policy.json`
+  is what the *operator's own* AWS identity needs to create the stack, the roles and the host
+  in the first place — a distinct, narrower permission set that does not let the deployer act
+  as the running platform.
 * KMS: the artifact bucket uses a customer-managed key; the job role and the
   backend role get `kms:Decrypt`/`GenerateDataKey` on that key only.
 * Dataset allow-list: the backend rejects any dataset URI whose bucket/prefix is not in

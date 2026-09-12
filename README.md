@@ -64,6 +64,12 @@ There is no database. An experiment is a self-contained S3 prefix holding its re
 configuration, models, comparison and reports — copy the prefix and you have copied the
 experiment.
 
+The "corporate server" is just a host running `docker compose`; nothing about the container
+assumes on-prem. Running it on an EC2 instance is the natural AWS-native choice — the
+CloudFormation stack creates an instance profile for exactly that — and is walked through step
+by step in [`infrastructure/README.md`](infrastructure/README.md#running-docker-compose-on-aws),
+alongside the account permissions needed to deploy and to run it.
+
 ## Deploying
 
 Two steps, in this order. The first is AWS-side and is needed once per release; the second
@@ -143,12 +149,13 @@ only be read by asking for the value explicitly. The credentials file is execute
 so treat it as code: it may contain comments and helpers, and names starting with `_` are
 ignored.
 
-**Prefer an instance role.** Leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` as `None` and
-give the corporate server a role, or mount `~/.aws` into the container; boto3's default chain
-then applies and there is nothing to rotate. Static keys are the fallback for hosts without a
-role, and must be set as a pair — a half-configured pair is reported by
-`GET /api/v1/health`, which also states which credential source is in effect without ever
-returning a credential.
+**Prefer an instance role.** Leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` as `None`. On
+EC2, attach the stack's `MlFactoryBackendInstanceProfile` when you launch the host — boto3's
+default chain finds it automatically and there is nothing to rotate. Off EC2, mount `~/.aws`
+into the container instead. Static keys in `config/secrets/config.py` are the fallback for
+neither of those being available, and must be set as a pair — a half-configured pair is
+reported by `GET /api/v1/health`, which also states which credential source is in effect
+without ever returning a credential.
 
 The settings that matter:
 
