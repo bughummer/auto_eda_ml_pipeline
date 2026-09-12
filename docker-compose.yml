@@ -24,12 +24,18 @@ services:
       ML_FACTORY_MODE: ${ML_FACTORY_MODE:-local}
       ML_FACTORY_LOG_LEVEL: ${ML_FACTORY_LOG_LEVEL:-INFO}
       ML_FACTORY_AWS_REGION: ${ML_FACTORY_AWS_REGION:-eu-central-1}
+      # local mode only: datasets are read from inside the container, so the UI takes
+      # /data/<file>. In aws mode this is unused - datasets are read from S3 by the jobs.
+      ML_FACTORY_LOCAL_DATA_HINT: /data
     volumes:
       # The platform's configuration, exactly as .env.example documents it.
       - ./.env:/app/.env:ro
       # Credentials. The directory is mounted, so it works before config.py exists;
       # config/secrets/config.py is gitignored and read-only in the container.
       - ./config/secrets:/app/config/secrets:ro
+      # Local-mode datasets. Point ML_FACTORY_DATA_DIR at wherever the CSV/Parquet files
+      # live on the host; the container reads them read-only as /data/<file>.
+      - ${ML_FACTORY_DATA_DIR:-./var/sample-data}:/data:ro
       # Local-mode artifacts survive a restart; unused in aws mode.
       - ml_factory_artifacts:/app/var
       # AWS mode: uncomment to pass the server's credentials to the control plane.

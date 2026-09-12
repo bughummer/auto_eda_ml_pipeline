@@ -95,8 +95,33 @@ export https_proxy=http://10.0.139.93:8080
 docker compose up -d --build
 ```
 
-In `aws` mode the container needs credentials: uncomment the `~/.aws` mount in
-`docker-compose.yml`, or attach an instance role to the host.
+### What runs where
+
+| | `local` mode | `aws` mode |
+|---|---|---|
+| Runs on the corporate server | this container, and nothing else | this container, and nothing else |
+| EDA, preprocessing, training, evaluation | inside this container, in a thread pool | ephemeral SageMaker jobs |
+| Datasets read from | `/data` — the host directory mounted read-only (`ML_FACTORY_DATA_DIR`) | S3, by the jobs |
+| Artifacts written to | the `ml_factory_artifacts` volume | S3 |
+| Experiment records | in memory; lost on restart | DynamoDB |
+
+Nothing else is installed on the host: the image builds the React app itself, so no Node and
+no Python venv are needed to run the platform — those are development conveniences only.
+
+Two caveats worth knowing before you pick a mode:
+
+* **`local` mode does all the ML work inside this container**, on the server's own CPU and
+  RAM, and it keeps experiment records in memory, so a restart loses the list (the artifacts
+  on the volume survive). It is meant for evaluation, demos and development, not for a shared
+  production instance.
+* **`aws` mode needs a one-time deployment that `docker compose` does not perform**: build and
+  push the *job* image (`infrastructure/docker/Dockerfile`, a different image from this one),
+  upload the two Step Functions definitions, and deploy the CloudFormation stack. See
+  [`infrastructure/README.md`](infrastructure/README.md). After that, this container is again
+  the only thing running locally.
+
+In `aws` mode the container needs credentials: fill in `config/secrets/config.py`, uncomment
+the `~/.aws` mount in `docker-compose.yml`, or attach an instance role to the host.
 
 ## Credentials and configuration
 
