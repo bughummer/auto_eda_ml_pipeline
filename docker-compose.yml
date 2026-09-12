@@ -1,0 +1,43 @@
+# ML Factory - single service: FastAPI serves the API and the built React UI.
+# Run: docker compose up -d --build   (then open http://<host>:7570)
+
+services:
+  ml-factory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+    container_name: ml_factory
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8520
+    ports:
+      - "7570:8520"
+    environment:
+      PYTHONPATH: /app
+      http_proxy: ${http_proxy:-}
+      https_proxy: ${https_proxy:-}
+      # Loopback and internal hosts must bypass the proxy.
+      no_proxy: ${no_proxy:-localhost,127.0.0.1}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+      # local: filesystem + in-process runner. aws: S3 + Step Functions + DynamoDB.
+      ML_FACTORY_MODE: ${ML_FACTORY_MODE:-local}
+      ML_FACTORY_LOG_LEVEL: ${ML_FACTORY_LOG_LEVEL:-INFO}
+      ML_FACTORY_AWS_REGION: ${ML_FACTORY_AWS_REGION:-eu-central-1}
+    volumes:
+      # The platform's configuration, exactly as .env.example documents it.
+      - ./.env:/app/.env:ro
+      # Local-mode artifacts survive a restart; unused in aws mode.
+      - ml_factory_artifacts:/app/var
+      # AWS mode: uncomment to pass the server's credentials to the control plane.
+      # - ${HOME}/.aws:/home/mlfactory/.aws:ro
+    networks:
+      - dev_network
+    restart: unless-stopped
+
+networks:
+  dev_network:
+    external: true
+
+volumes:
+  ml_factory_artifacts:

@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    static_dir: Path | None = Field(
+        default=None,
+        description=(
+            "Directory holding the built frontend. Set in the container image so one service "
+            "serves both the API and the UI; unset during development, where Vite serves the UI."
+        ),
+    )
 
     # --- local mode -------------------------------------------------------
     local_root: Path = Path("./var/ml-factory")

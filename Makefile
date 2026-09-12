@@ -2,7 +2,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front demo openapi clean
+.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front demo openapi docker-build docker-up docker-down docker-logs clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -47,6 +47,18 @@ demo: ## generate a sample dataset and run a full local experiment
 
 openapi: ## export the OpenAPI document for the frontend
 	$(PY) scripts/export_openapi.py
+
+docker-build: ## build the single-service image (honours http_proxy / https_proxy)
+	docker compose build
+
+docker-up: ## start the platform on http://localhost:7570
+	docker compose up -d
+
+docker-down: ## stop it
+	docker compose down
+
+docker-logs: ## follow the container logs
+	docker compose logs -f ml-factory
 
 clean:
 	rm -rf .pytest_cache .ruff_cache var/ml-factory frontend/dist

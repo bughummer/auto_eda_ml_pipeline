@@ -51,7 +51,7 @@ stays with the person.
 ```bash
 make install                 # python 3.12 venv + npm install
 make demo                    # a full experiment end to end against the local adapters
-make test                    # 312 tests
+make test                    # 319 tests
 make dev                     # API on :8000, UI on :5173
 ```
 
@@ -63,6 +63,40 @@ model comparison that results once those recommendations are acted on.
 In local mode (`ML_FACTORY_MODE=local`, the default) the platform runs the *same* job code in
 a background thread pool against a directory tree that mirrors the S3 layout. Switching to
 `ML_FACTORY_MODE=aws` swaps two adapters — storage and orchestration — and nothing else.
+
+## Running with Docker
+
+One service: FastAPI serves the API and the built React app from the same process, so there is
+one container, one port and one origin — no CORS and no separate web server.
+
+```bash
+cp .env.example .env          # the container mounts this read-only
+docker network create dev_network   # once per host, if it does not exist yet
+docker compose up -d --build
+# http://<host>:7570
+```
+
+| Detail | Value |
+|---|---|
+| Published port | `7570` on the host, `8520` in the container |
+| Network | the external `dev_network`, joined by the service |
+| Config | `./.env` mounted read-only at `/app/.env` |
+| Local-mode artifacts | the named volume `ml_factory_artifacts` at `/app/var` |
+| Health | `curl http://localhost:7570/api/v1/health`, also wired as a container `HEALTHCHECK` |
+
+Behind the corporate proxy, `http_proxy` and `https_proxy` are passed as build arguments (npm
+and pip need them at build time) and as environment variables (boto3 needs them at runtime).
+`no_proxy` keeps loopback off the proxy so the healthcheck works. The image also writes an apt
+proxy file from the same build argument, so the proxy is defined in one place:
+
+```bash
+export http_proxy=http://10.0.139.93:8080
+export https_proxy=http://10.0.139.93:8080
+docker compose up -d --build
+```
+
+In `aws` mode the container needs credentials: uncomment the `~/.aws` mount in
+`docker-compose.yml`, or attach an instance role to the host.
 
 ## Configuration
 

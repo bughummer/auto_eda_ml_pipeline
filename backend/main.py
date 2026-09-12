@@ -8,9 +8,12 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import dictionary, experiments, health, models, reasoning
 from backend.config import Settings, get_settings
@@ -80,7 +83,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(experiments.router, prefix=settings.api_prefix)
     app.include_router(dictionary.router, prefix=settings.api_prefix)
     app.include_router(reasoning.router, prefix=settings.api_prefix)
+
+    if settings.static_dir is not None:
+        mount_frontend(app, settings.static_dir)
     return app
+
+
+def mount_frontend(app: FastAPI, directory: Path) -> None:
+    """Serve the built single-page app alongside the API from one process.
+
+    This is what lets the platform ship as a single container: uvicorn answers /api/v1/* and
+    everything else falls through to the SPA's index.html so client-side routes survive a
+    page reload. Routers are registered first, so the mount can never shadow the API.
+    """
+    root = directory.expanduser()
+    index = root / "index.html"
+    if not index.is_file():
+        LOGGER.warning("No frontend build at %s; serving the API only", root)
+        return
+
+    assets = root / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/{spa_path:path}", include_in_schema=False)
+    async def serve_spa(spa_path: str) -> FileResponse:
+        candidate = (root / spa_path).resolve()
+        if spa_path and candidate.is_file() and candidate.is_relative_to(root.resolve()):
+            return FileResponse(candidate)
+        return FileResponse(index)
+
+    LOGGER.info("Serving the frontend from %s", root)
 
 
 app = create_app()
