@@ -166,14 +166,17 @@ runtime, so a misconfigured deployment says so instead of failing on the first e
 
 ## Browsing previous experiments
 
-The experiment list has an artifact-bucket selector. Choosing a bucket lists every experiment
-stored under it — status, target, best model and score — and opening one shows its full EDA,
-feature review, training result and comparison, read-only.
+The experiment list shows every experiment in this platform's artifact bucket — status,
+target, best model and score — and opening one shows its full EDA, feature review, training
+result and comparison. Experiments persist across restarts and redeploys because the record
+lives in the bucket, not in the container.
 
-This works because a record is just objects in the bucket, so results produced by another
-environment (a production instance, a colleague's account) need no shared database and no
-import step. Add those buckets to `ML_FACTORY_ADDITIONAL_ARTIFACT_ROOTS`; only configured
-buckets are readable, and new experiments are always written to this platform's own bucket.
+`ML_FACTORY_ADDITIONAL_ARTIFACT_ROOTS` is empty by default and most deployments should leave
+it that way. It exists for the case where you run **more than one** ML Factory — a production
+instance and a development one, or a second AWS account — and want one UI to read the other's
+results. Listing a bucket there adds a bucket selector to the experiment list; those buckets
+are read-only, and new experiments are always written to this platform's own bucket. With no
+extra buckets configured, no selector appears.
 
 ## Repository layout
 

@@ -50,10 +50,11 @@ EDA_STATE_MACHINE_ARN = ""  # "arn:aws:states:eu-central-1:123456789012:stateMac
 TRAINING_STATE_MACHINE_ARN = ""  # "arn:aws:states:...:stateMachine:ml-factory-training"
 KMS_KEY_ID = ""  # customer-managed key protecting the artifact bucket
 
-# Other artifact buckets the UI may browse read-only, to see experiments that another
-# environment produced. New experiments are always written to ARTIFACT_BUCKET.
+# Leave this empty unless you run more than one ML Factory. It lists OTHER instances'
+# artifact buckets so this UI can read their experiments read-only; your own bucket above
+# already holds all of your own experiments. New experiments always go to ARTIFACT_BUCKET.
 ADDITIONAL_ARTIFACT_ROOTS = [
-    # "s3://ml-factory-artifacts-prod",
+    # "s3://ml-factory-artifacts-prod",   # e.g. read production results from the dev instance
 ]
 
 # Datasets outside these prefixes are rejected before any AWS call is made.

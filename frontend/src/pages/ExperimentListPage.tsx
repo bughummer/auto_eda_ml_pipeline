@@ -35,20 +35,24 @@ export function ExperimentListPage() {
       title="Experiments"
       extra={
         <Space>
-          <Tooltip title="Experiment results are read from this artifact bucket.">
-            <Select
-              value={activeRoot || undefined}
-              style={{ minWidth: 320 }}
-              placeholder="Artifact bucket"
-              options={roots.map((root) => ({
-                value: root,
-                label: root === health?.artifact_root ? `${root} (this platform)` : root,
-              }))}
-              onChange={(root) =>
-                setSearchParams(root === health?.artifact_root ? {} : { root }, { replace: true })
-              }
-            />
-          </Tooltip>
+          {/* One bucket is the normal case, and a one-item dropdown is just noise. The
+              selector appears only when another artifact bucket has been configured. */}
+          {roots.length > 1 && (
+            <Tooltip title="Experiment results are read from this artifact bucket.">
+              <Select
+                value={activeRoot || undefined}
+                style={{ minWidth: 320 }}
+                placeholder="Artifact bucket"
+                options={roots.map((root) => ({
+                  value: root,
+                  label: root === health?.artifact_root ? `${root} (this platform)` : root,
+                }))}
+                onChange={(root) =>
+                  setSearchParams(root === health?.artifact_root ? {} : { root }, { replace: true })
+                }
+              />
+            </Tooltip>
+          )}
           <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isFetching}>
             Refresh
           </Button>
