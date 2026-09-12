@@ -31,6 +31,7 @@ from backend.schemas.experiments import (
     UpdateFeatureSelectionRequest,
 )
 from ml_engine.contracts.common import (
+    ACTION_ORDER,
     ClassWeighting,
     ExperimentStatus,
     LeakageRiskLevel,
@@ -209,6 +210,7 @@ class ExperimentService:
             if profile.name == record.target_column:
                 continue
             risk = leakage.risk_for(profile.name)
+            column_warnings = warnings_by_column.get(profile.name, [])
             documentation = dictionary.for_column(profile.name) if dictionary else None
             items.append(
                 FeatureReviewItem(
@@ -224,10 +226,15 @@ class ExperimentService:
                     is_likely_id=profile.is_likely_id,
                     leakage_risk=risk.risk_level if risk else LeakageRiskLevel.NONE,
                     max_severity=risk.max_severity if risk else None,
-                    recommended_action=risk.recommended_action if risk else RecommendedAction.KEEP,
-                    reasons=risk.reasons if risk else [],
+                    recommended_action=_recommended_action(risk, column_warnings),
+                    reasons=(risk.reasons if risk else [])
+                    + [
+                        w.message
+                        for w in column_warnings
+                        if w.recommended_action != RecommendedAction.KEEP
+                    ],
                     rules=risk.rules if risk else [],
-                    warnings=warnings_by_column.get(profile.name, []),
+                    warnings=column_warnings,
                     documentation=documentation.business_definition if documentation else None,
                     available_at_prediction_time=(
                         documentation.available_at_prediction_time if documentation else None
@@ -516,6 +523,20 @@ class ExperimentService:
             size_bytes=metadata.size_bytes if metadata else None,
             last_modified=metadata.last_modified if metadata else None,
         )
+
+
+def _recommended_action(risk, column_warnings) -> RecommendedAction:
+    """The strongest recommendation across leakage findings and EDA warnings.
+
+    A column can be uninteresting for reasons that have nothing to do with leakage — it is
+    constant, it is free text, it is almost entirely missing — and the review table must say
+    so rather than showing "keep" next to a warning.
+    """
+    candidates = [risk.recommended_action] if risk else []
+    candidates.extend(warning.recommended_action for warning in column_warnings)
+    if not candidates:
+        return RecommendedAction.KEEP
+    return max(candidates, key=lambda action: ACTION_ORDER[action])
 
 
 def _new_experiment_id() -> str:

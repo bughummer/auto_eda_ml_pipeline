@@ -281,3 +281,12 @@ def test_training_cannot_start_twice(container, ready_experiment):
         container.experiments.start_training(
             ready_experiment.experiment_id, TrainingConfigRequest(), USER
         )
+
+
+def test_review_recommendation_reflects_eda_warnings_too(container, ready_experiment):
+    """A text or constant column is worth excluding even with no leakage finding."""
+    review = container.experiments.feature_review(ready_experiment.experiment_id)
+    text_column = next(f for f in review.features if f.feature == "notes")
+    assert text_column.leakage_risk.value == "none"
+    assert text_column.recommended_action.value == "consider_excluding"
+    assert text_column.reasons

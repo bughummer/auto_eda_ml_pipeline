@@ -26,6 +26,12 @@ from ml_engine.contracts.warnings import AnalysisWarning, sort_warnings
 from ml_engine.evaluation import metric_direction, resolve_primary_metric
 from ml_engine.evaluation.metrics import MetricDirection
 
+# A validation score this close to perfect is almost always leakage, not a good model.
+SUSPICIOUSLY_PERFECT = 0.999
+BOUNDED_METRICS = frozenset(
+    {"roc_auc", "pr_auc", "accuracy", "f1", "macro_f1", "weighted_f1", "r2"}
+)
+
 
 def build_comparison(
     *,
@@ -99,7 +105,27 @@ def build_comparison(
                 ),
             )
         )
-    elif len(ranked) > 1:
+    if (
+        ranked
+        and metric in BOUNDED_METRICS
+        and ranked[0].primary_score is not None
+        and ranked[0].primary_score >= SUSPICIOUSLY_PERFECT
+    ):
+        warnings.append(
+            AnalysisWarning(
+                rule="suspiciously_perfect_score",
+                category=WarningCategory.LEAKAGE,
+                severity=Severity.HIGH,
+                message=(
+                    f"The best model reaches {metric}={ranked[0].primary_score:.4f} on validation "
+                    "data. Scores this close to perfect nearly always mean a feature encodes the "
+                    "outcome. Re-check the leakage findings before trusting this result."
+                ),
+                details={"metric": metric, "score": ranked[0].primary_score},
+            )
+        )
+
+    if len(ranked) > 1:
         best, runner_up = ranked[0].primary_score, ranked[1].primary_score
         if best is not None and runner_up is not None and abs(best - runner_up) < 1e-6:
             warnings.append(

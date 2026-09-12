@@ -143,3 +143,26 @@ def test_best_score_matches_the_best_model():
         failures=[],
     )
     assert comparison.best_score == pytest.approx(0.93)
+
+
+def test_a_perfect_score_is_flagged_as_probable_leakage():
+    comparison = build_comparison(
+        experiment_id="exp-1",
+        problem_type=ProblemType.BINARY_CLASSIFICATION,
+        primary_metric="roc_auc",
+        successes=[_metadata("a", roc_auc=1.0)],
+        failures=[],
+    )
+    warning = next(w for w in comparison.warnings if w.rule == "suspiciously_perfect_score")
+    assert warning.category.value == "leakage"
+
+
+def test_a_normal_score_is_not_flagged():
+    comparison = build_comparison(
+        experiment_id="exp-1",
+        problem_type=ProblemType.BINARY_CLASSIFICATION,
+        primary_metric="roc_auc",
+        successes=[_metadata("a", roc_auc=0.87)],
+        failures=[],
+    )
+    assert not any(w.rule == "suspiciously_perfect_score" for w in comparison.warnings)
