@@ -163,3 +163,6 @@ class ExperimentConfig(StrictModel):
     compute: ComputeConfig = Field(default_factory=ComputeConfig)
     environment: EnvironmentCapture
     artifact_prefix: str
+
+    def enabled_models_specs(self) -> list[ModelSpec]:
+        return [m for m in self.models if m.enabled]

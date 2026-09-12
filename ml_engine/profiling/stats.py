@@ -26,7 +26,9 @@ def _clean(value: float | None) -> float | None:
 
 
 def numeric_stats(series: pd.Series) -> NumericStats:
-    numeric = pd.to_numeric(series, errors="coerce")
+    # Booleans are numeric to pandas but not to quantiles; widen them first.
+    source = series.astype("float64") if pdt.is_bool_dtype(series) else series
+    numeric = pd.to_numeric(source, errors="coerce")
     non_null = numeric.dropna()
     if non_null.empty:
         return NumericStats(

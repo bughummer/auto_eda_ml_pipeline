@@ -17,7 +17,7 @@ SELECTED_FEATURES_FILE = "config/selected_features.json"
 TRAINING_CONFIG_FILE = "config/training_config.json"
 DATA_DICTIONARY_FILE = "config/data_dictionary.json"
 PREPARATION_FILE = "validation/validation.json"
-PREPROCESSOR_FILE = "preprocessing/preprocessor.joblib"
+PREPROCESSOR_FILE_TEMPLATE = "preprocessing/preprocessor_{strategy}.joblib"
 PREPROCESSING_METADATA_FILE = "preprocessing/preprocessing.json"
 TRAIN_DATASET_FILE = "datasets/train.parquet"
 VALIDATION_DATASET_FILE = "datasets/validation.parquet"
@@ -73,9 +73,9 @@ class ExperimentLayout:
     def preparation(self) -> str:
         return self.path(PREPARATION_FILE)
 
-    @property
-    def preprocessor(self) -> str:
-        return self.path(PREPROCESSOR_FILE)
+    def preprocessor(self, strategy: str) -> str:
+        """One fitted pipeline per preprocessing strategy; both fit on the train fold only."""
+        return self.path(PREPROCESSOR_FILE_TEMPLATE.format(strategy=strategy))
 
     @property
     def preprocessing_metadata(self) -> str:

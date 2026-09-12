@@ -37,5 +37,7 @@ class PreparationReport(StrictModel):
     rows_after: int
     rows_dropped_missing_target: int
     split: SplitSummary
-    preprocessing: PreprocessingMetadata
+    preprocessing: dict[str, PreprocessingMetadata] = Field(
+        default_factory=dict, description="Preprocessing strategy name -> what that pipeline did."
+    )
     warnings: list[AnalysisWarning] = Field(default_factory=list)

@@ -152,7 +152,9 @@ def _profile_column(series: pd.Series, config: ProfilingConfig) -> ColumnProfile
     )
 
     if semantic_type in _NUMERIC_TYPES or (
-        pdt.is_numeric_dtype(series) and semantic_type is not SemanticType.DATETIME
+        pdt.is_numeric_dtype(series)
+        and not pdt.is_bool_dtype(series)
+        and semantic_type is not SemanticType.DATETIME
     ):
         profile.numeric = stats_module.numeric_stats(series)
     if semantic_type is SemanticType.DATETIME:

@@ -93,3 +93,21 @@ class ModelFailure(StrictModel):
     message: str = Field(description="User-safe message. No stack traces.")
     failed_at: datetime
     details: dict[str, str] = Field(default_factory=dict)
+
+
+class ModelDescriptor(StrictModel):
+    """Catalogue entry describing an available model plugin (served by ``GET /models``)."""
+
+    name: str
+    display_name: str
+    library: str
+    library_version: str | None = None
+    supported_problem_types: list[ProblemType]
+    requires_dense_numeric: bool
+    supports_native_categorical: bool
+    supports_class_weighting: bool
+    supports_probabilities: bool
+    available: bool = True
+    unavailable_reason: str | None = None
+    default_parameters: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
+    description: str = ""
