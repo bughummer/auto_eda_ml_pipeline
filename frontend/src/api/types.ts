@@ -404,6 +404,7 @@ export interface HealthResponse {
   mode: string;
   orchestrator: string;
   artifact_root: string;
+  credential_source: string;
   bedrock_enabled: boolean;
   configuration_problems: string[];
   available_models: string[];

@@ -135,7 +135,7 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 ```
 make install      # python venv + npm install
 make lint         # ruff: clean
-make test         # pytest: 319 tests, all green
+make test         # pytest: 335 tests, all green
 make build-front  # tsc --noEmit + vite build: clean
 make demo         # a complete local experiment, end to end, without AWS
 ```

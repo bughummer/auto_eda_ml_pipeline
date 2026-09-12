@@ -29,8 +29,10 @@ frontend  → backend HTTP API only                     (never AWS)
    decides. Recommendations must carry rule id, severity, explanation and recommended action.
 7. **Every artifact is a Pydantic contract** from `ml_engine/contracts`. Do not hand-build dicts
    for anything written to S3 or returned from the API.
-8. **No secrets in the repository.** Configuration comes from environment variables; see
-   `.env.example`.
+8. **No secrets in the repository.** Non-secret configuration comes from `.env.example`;
+   credentials go in `config/secrets/config.py`, which is gitignored. Keep
+   `config/secrets/config.sample.py` free of real values, and keep every secret field a
+   `SecretStr` so it cannot be logged or serialized by accident.
 
 ## Conventions
 

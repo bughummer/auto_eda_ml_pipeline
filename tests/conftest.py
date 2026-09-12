@@ -13,6 +13,14 @@ from ml_engine.io import ExperimentLayout, LocalObjectStore
 from ml_engine.profiling import profile_dataset
 
 
+@pytest.fixture(autouse=True)
+def _isolated_secrets_file(tmp_path_factory, monkeypatch):
+    """Tests never read a developer's real config/secrets/config.py."""
+    monkeypatch.setenv(
+        "ML_FACTORY_SECRETS_FILE", str(tmp_path_factory.mktemp("no-secrets") / "config.py")
+    )
+
+
 @pytest.fixture
 def artifact_root(tmp_path: Path) -> Path:
     root = tmp_path / "artifacts"

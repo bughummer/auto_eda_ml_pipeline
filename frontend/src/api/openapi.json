@@ -1879,6 +1879,12 @@
             "title": "Configuration Problems",
             "type": "array"
           },
+          "credential_source": {
+            "default": "",
+            "description": "How AWS credentials are obtained. Never contains a credential.",
+            "title": "Credential Source",
+            "type": "string"
+          },
           "mode": {
             "title": "Mode",
             "type": "string"

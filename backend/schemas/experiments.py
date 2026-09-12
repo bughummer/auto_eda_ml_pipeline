@@ -161,6 +161,9 @@ class HealthResponse(StrictModel):
     mode: str
     orchestrator: str
     artifact_root: str
+    credential_source: str = Field(
+        default="", description="How AWS credentials are obtained. Never contains a credential."
+    )
     bedrock_enabled: bool
     configuration_problems: list[str] = Field(default_factory=list)
     available_models: list[str] = Field(default_factory=list)

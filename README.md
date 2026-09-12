@@ -51,7 +51,7 @@ stays with the person.
 ```bash
 make install                 # python 3.12 venv + npm install
 make demo                    # a full experiment end to end against the local adapters
-make test                    # 319 tests
+make test                    # 335 tests
 make dev                     # API on :8000, UI on :5173
 ```
 
@@ -98,9 +98,37 @@ docker compose up -d --build
 In `aws` mode the container needs credentials: uncomment the `~/.aws` mount in
 `docker-compose.yml`, or attach an instance role to the host.
 
-## Configuration
+## Credentials and configuration
 
-Copy `.env.example` to `.env`. The settings that matter:
+Configuration has one module, `backend/config.py`, and three sources — highest precedence first:
+
+| Source | What belongs there |
+|---|---|
+| `ML_FACTORY_*` environment variables | per-deployment overrides; what Compose and systemd set |
+| `.env` (copy of `.env.example`) | non-secret settings |
+| `config/secrets/config.py` | **credentials** — copied from the tracked sample, never committed |
+
+```bash
+cp config/secrets/config.sample.py config/secrets/config.py   # then fill it in
+```
+
+`config/secrets/config.py` is in `.gitignore`, so `git add .` will not pick it up and
+`git status` will not offer it. `config/secrets/config.sample.py` is tracked and carries no
+real values; a test asserts both of those facts, and that the sample stays credential-free.
+
+Secrets are held as `SecretStr`, so they are masked in logs, reprs and `model_dump()` and can
+only be read by asking for the value explicitly. The credentials file is executed as Python,
+so treat it as code: it may contain comments and helpers, and names starting with `_` are
+ignored.
+
+**Prefer an instance role.** Leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` as `None` and
+give the corporate server a role, or mount `~/.aws` into the container; boto3's default chain
+then applies and there is nothing to rotate. Static keys are the fallback for hosts without a
+role, and must be set as a pair — a half-configured pair is reported by
+`GET /api/v1/health`, which also states which credential source is in effect without ever
+returning a credential.
+
+The settings that matter:
 
 | Variable | Meaning |
 |---|---|

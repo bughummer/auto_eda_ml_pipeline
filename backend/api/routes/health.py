@@ -22,6 +22,7 @@ def health(container: ContainerDep) -> HealthResponse:
         mode=settings.mode.value,
         orchestrator=container.orchestrator.name,
         artifact_root=settings.artifact_root,
+        credential_source=settings.credential_source(),
         bedrock_enabled=settings.bedrock_enabled,
         configuration_problems=problems,
         available_models=models,

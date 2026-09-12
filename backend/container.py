@@ -59,12 +59,12 @@ def build_container(settings: Settings | None = None) -> AppContainer:
     else:
         from backend.aws import build_client, build_dynamodb_table
 
-        store = S3ObjectStore(build_client("s3", settings.aws_region))
+        store = S3ObjectStore(build_client("s3", settings))
         repository = DynamoExperimentRepository(
-            build_dynamodb_table(settings.experiments_table, settings.aws_region)
+            build_dynamodb_table(settings.experiments_table, settings)
         )
         orchestrator = StepFunctionsOrchestrator(
-            build_client("stepfunctions", settings.aws_region),
+            build_client("stepfunctions", settings),
             eda_state_machine_arn=settings.eda_state_machine_arn,
             training_state_machine_arn=settings.training_state_machine_arn,
             experiments_table=settings.experiments_table,
@@ -100,7 +100,7 @@ def _build_reasoning_client(settings: Settings):
     from ml_engine.reasoning import BedrockReasoningClient
 
     return BedrockReasoningClient(
-        build_client("bedrock-runtime", settings.aws_region),
+        build_client("bedrock-runtime", settings),
         model_id=settings.bedrock_model_id,
         max_tokens=settings.bedrock_max_tokens,
     )

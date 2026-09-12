@@ -27,6 +27,9 @@ services:
     volumes:
       # The platform's configuration, exactly as .env.example documents it.
       - ./.env:/app/.env:ro
+      # Credentials. The directory is mounted, so it works before config.py exists;
+      # config/secrets/config.py is gitignored and read-only in the container.
+      - ./config/secrets:/app/config/secrets:ro
       # Local-mode artifacts survive a restart; unused in aws mode.
       - ml_factory_artifacts:/app/var
       # AWS mode: uncomment to pass the server's credentials to the control plane.
