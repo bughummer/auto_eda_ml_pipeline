@@ -5,7 +5,7 @@ import pytest
 from backend.config import Settings
 from backend.container import build_container
 from backend.errors import ConflictError, FeatureDisabledError, ValidationError
-from backend.repositories import InMemoryExperimentRepository
+from backend.repositories import ObjectStoreExperimentRepository
 from backend.schemas.experiments import (
     CreateExperimentRequest,
     TrainingConfigRequest,
@@ -29,9 +29,8 @@ def ready_experiment(container, dataset_csv):
     return container.experiments.get(record.experiment_id)
 
 
-def test_dataset_allow_list_is_enforced_in_aws_mode(tmp_path):
+def test_dataset_allow_list_is_enforced(tmp_path):
     settings = Settings(
-        mode="aws",
         artifact_bucket="s3://artifacts",
         allowed_dataset_prefixes=["s3://approved/curated"],
         eda_state_machine_arn="arn:eda",
@@ -43,10 +42,20 @@ def test_dataset_allow_list_is_enforced_in_aws_mode(tmp_path):
 
 
 def test_missing_aws_configuration_is_reported():
-    problems = Settings(mode="aws").validate_for_mode()
+    problems = Settings().validate_configuration()
     assert any("ARTIFACT_BUCKET" in p for p in problems)
     assert any("ALLOWED_DATASET_PREFIXES" in p for p in problems)
     assert any("STATE_MACHINE_ARN" in p for p in problems)
+
+
+def test_artifact_roots_are_allow_listed():
+    settings = Settings(
+        artifact_bucket="s3://artifacts",
+        additional_artifact_roots=["s3://other-team-artifacts"],
+    )
+    assert settings.artifact_roots == ["s3://artifacts", "s3://other-team-artifacts"]
+    assert settings.artifact_root_allowed("s3://other-team-artifacts/") is True
+    assert settings.artifact_root_allowed("s3://somewhere-else") is False
 
 
 def test_creation_records_dataset_identity(container, dataset_csv):
@@ -172,21 +181,26 @@ def test_reasoning_requires_bedrock(container, ready_experiment):
         container.reasoning.run(ready_experiment.experiment_id, ReasoningRequest())
 
 
-def test_reasoning_runs_against_deterministic_artifacts(artifact_root, dataset_csv):
+def test_reasoning_runs_against_deterministic_artifacts(artifact_root, dataset_csv, store):
     import json
 
+    from tests.support.inline_orchestrator import InlineOrchestrator
+
     settings = Settings(
-        mode="local",
-        local_root=artifact_root,
+        artifact_bucket=artifact_root,
+        allowed_dataset_prefixes=["s3://ml-factory-test-data"],
         bedrock_enabled=True,
         bedrock_model_id="fake.model",
     )
-    container = build_container(settings)
+    container = build_container(
+        settings,
+        store=store,
+        repository=ObjectStoreExperimentRepository(store, settings.artifact_root),
+        orchestrator=InlineOrchestrator(store),
+    )
     try:
         record = container.experiments.create(
-            CreateExperimentRequest(
-                name="x", dataset_uri=str(dataset_csv), target_column="churned"
-            ),
+            CreateExperimentRequest(name="x", dataset_uri=dataset_csv, target_column="churned"),
             USER,
         )
         container.orchestrator.wait_for_idle(timeout=300)
@@ -246,28 +260,56 @@ def test_repository_soft_delete_hides_the_record(container, ready_experiment):
     assert container.experiments.list() == []
 
 
-def test_repository_updates_bump_the_timestamp():
+def test_repository_round_trips_a_record_through_the_store(artifact_root, store):
     from datetime import UTC, datetime
 
     from ml_engine.contracts.config import DatasetReference
-    from ml_engine.contracts.experiment import ExperimentRecord
+    from ml_engine.contracts.experiment import ExperimentDefinition
+    from ml_engine.io import ExperimentLayout
 
-    repository = InMemoryExperimentRepository()
+    repository = ObjectStoreExperimentRepository(store, str(artifact_root))
+    layout = ExperimentLayout.for_experiment(str(artifact_root), "exp-1")
     now = datetime.now(UTC)
     repository.create(
-        ExperimentRecord(
+        ExperimentDefinition(
             experiment_id="exp-1",
             name="x",
             created_at=now,
-            updated_at=now,
             dataset=DatasetReference(uri="s3://b/k.csv", file_format="csv"),
             target_column="y",
-            artifact_prefix="s3://b/p",
+            artifact_prefix=layout.base,
         )
     )
-    updated = repository.update("exp-1", status=ExperimentStatus.TRAINING)
-    assert updated.status is ExperimentStatus.TRAINING
-    assert updated.updated_at > now
+    assert store.exists(layout.definition)
+    assert store.exists(layout.control_state)
+
+    updated = repository.update("exp-1", status=ExperimentStatus.READY_FOR_TRAINING)
+    assert updated.status is ExperimentStatus.READY_FOR_TRAINING
+    assert updated.updated_at >= now
+    assert repository.get("exp-1").status is ExperimentStatus.READY_FOR_TRAINING
+    assert [record.experiment_id for record in repository.list()] == ["exp-1"]
+
+
+def test_the_control_plane_cannot_write_workflow_fields(artifact_root, store):
+    from datetime import UTC, datetime
+
+    from ml_engine.contracts.config import DatasetReference
+    from ml_engine.contracts.experiment import ExperimentDefinition
+    from ml_engine.io import ExperimentLayout
+
+    repository = ObjectStoreExperimentRepository(store, str(artifact_root))
+    repository.create(
+        ExperimentDefinition(
+            experiment_id="exp-2",
+            name="x",
+            created_at=datetime.now(UTC),
+            dataset=DatasetReference(uri="s3://b/k.csv", file_format="csv"),
+            target_column="y",
+            artifact_prefix=ExperimentLayout.for_experiment(str(artifact_root), "exp-2").base,
+        )
+    )
+    with pytest.raises(ValueError, match="does not own"):
+        repository.update("exp-2", best_model="xgboost")
 
 
 def test_training_cannot_start_twice(container, ready_experiment):

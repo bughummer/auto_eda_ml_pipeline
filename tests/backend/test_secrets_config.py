@@ -25,14 +25,12 @@ def secrets_file(tmp_path, monkeypatch):
 
 def test_values_are_read_from_the_python_file(secrets_file):
     secrets_file(
-        'MODE = "aws"\n'
         'AWS_REGION = "eu-west-1"\n'
         'ARTIFACT_BUCKET = "s3://from-python-file"\n'
         'AWS_ACCESS_KEY_ID = "AKIAEXAMPLE"\n'
         'AWS_SECRET_ACCESS_KEY = "shh"\n'
     )
     settings = Settings()
-    assert settings.mode.value == "aws"
     assert settings.aws_region == "eu-west-1"
     assert settings.artifact_bucket == "s3://from-python-file"
     assert settings.has_static_credentials is True
@@ -52,7 +50,7 @@ def test_environment_variables_win_over_the_file(secrets_file, monkeypatch):
 
 def test_a_missing_file_is_not_an_error(tmp_path, monkeypatch):
     monkeypatch.setenv("ML_FACTORY_SECRETS_FILE", str(tmp_path / "absent.py"))
-    assert Settings().mode.value == "local"
+    assert Settings().aws_region == "eu-central-1"
 
 
 def test_a_broken_file_fails_loudly(secrets_file):
@@ -84,7 +82,7 @@ def test_secrets_are_masked_everywhere_they_could_leak(secrets_file):
 
 def test_a_half_configured_key_pair_is_reported(secrets_file):
     secrets_file('AWS_ACCESS_KEY_ID = "AKIAEXAMPLE"\n')
-    problems = Settings().validate_for_mode()
+    problems = Settings().validate_configuration()
     assert any("must be set together" in problem for problem in problems)
 
 
@@ -152,8 +150,10 @@ def test_the_sample_contains_no_real_credentials():
 
 
 def test_the_sample_loads_and_produces_usable_defaults(monkeypatch):
+    """The sample is a working starting point: it parses, and its gaps are reported clearly."""
     monkeypatch.setenv("ML_FACTORY_SECRETS_FILE", str(SAMPLE))
     settings = Settings()
-    assert settings.mode.value == "local"
-    assert settings.validate_for_mode() == []
+    assert settings.aws_region
     assert credential_kwargs(settings) == {}
+    problems = settings.validate_configuration()
+    assert any("ARTIFACT_BUCKET" in problem for problem in problems)

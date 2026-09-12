@@ -7,16 +7,16 @@ from backend.main import create_app
 
 
 @pytest.fixture
-def client(settings) -> TestClient:
-    with TestClient(create_app(settings)) as test_client:
+def client(settings, container) -> TestClient:
+    with TestClient(create_app(settings, container=container)) as test_client:
         yield test_client
 
 
-def test_health_reports_the_active_mode(client):
+def test_health_reports_the_configuration(client, settings):
     body = client.get("/api/v1/health").json()
     assert body["status"] == "ok"
-    assert body["mode"] == "local"
-    assert body["orchestrator"] == "local"
+    assert body["artifact_root"] == settings.artifact_root
+    assert body["artifact_roots"] == [settings.artifact_root]
     assert "logistic_regression" in body["available_models"]
 
 
@@ -43,7 +43,7 @@ def test_create_experiment_returns_immediately(client, dataset_csv):
         "/api/v1/experiments",
         json={
             "name": "churn baseline",
-            "dataset_uri": str(dataset_csv),
+            "dataset_uri": dataset_csv,
             "target_column": "churned",
         },
         headers={"X-Remote-User": "analyst@corp.example"},
@@ -51,15 +51,17 @@ def test_create_experiment_returns_immediately(client, dataset_csv):
     assert response.status_code == 202
     body = response.json()
     assert body["experiment_id"].startswith("exp-")
-    assert body["status"] in {"CREATED", "EDA_RUNNING"}
+    # In AWS the workflow is still starting; the inline orchestrator used here has already
+    # finished profiling. Both are states the workflow owns, never invented by the API.
+    assert body["status"] in {"CREATED", "EDA_RUNNING", "FEATURE_REVIEW"}
 
 
-def test_unknown_dataset_is_rejected_with_the_error_envelope(client, tmp_path):
+def test_unknown_dataset_is_rejected_with_the_error_envelope(client):
     response = client.post(
         "/api/v1/experiments",
         json={
             "name": "bad",
-            "dataset_uri": str(tmp_path / "missing.csv"),
+            "dataset_uri": "s3://ml-factory-test-data/curated/missing.csv",
             "target_column": "y",
         },
     )
@@ -76,12 +78,14 @@ def test_malformed_request_is_rejected(client):
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_unsupported_dataset_format_is_rejected(client, tmp_path):
-    path = tmp_path / "data.txt"
-    path.write_text("nope")
+def test_unsupported_dataset_format_is_rejected(client):
     response = client.post(
         "/api/v1/experiments",
-        json={"name": "bad", "dataset_uri": str(path), "target_column": "y"},
+        json={
+            "name": "bad",
+            "dataset_uri": "s3://ml-factory-test-data/curated/data.txt",
+            "target_column": "y",
+        },
     )
     assert response.status_code == 422
     assert "format" in response.json()["error"]["message"]
@@ -93,10 +97,10 @@ def test_unknown_experiment_returns_not_found(client):
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_artifact_not_ready_is_distinguishable(client, dataset_csv, container):
+def test_artifact_not_ready_is_distinguishable(client, dataset_csv):
     experiment_id = client.post(
         "/api/v1/experiments",
-        json={"name": "x", "dataset_uri": str(dataset_csv), "target_column": "churned"},
+        json={"name": "x", "dataset_uri": dataset_csv, "target_column": "churned"},
     ).json()["experiment_id"]
     response = client.get(f"/api/v1/experiments/{experiment_id}/comparison")
     assert response.status_code == 404
@@ -106,9 +110,8 @@ def test_artifact_not_ready_is_distinguishable(client, dataset_csv, container):
 def test_training_requires_a_confirmed_feature_selection(client, dataset_csv):
     experiment_id = client.post(
         "/api/v1/experiments",
-        json={"name": "x", "dataset_uri": str(dataset_csv), "target_column": "churned"},
+        json={"name": "x", "dataset_uri": dataset_csv, "target_column": "churned"},
     ).json()["experiment_id"]
-    client.app.state.container.orchestrator.wait_for_idle(timeout=120)
     response = client.post(f"/api/v1/experiments/{experiment_id}/training", json={})
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "INVALID_STATE"
@@ -117,7 +120,7 @@ def test_training_requires_a_confirmed_feature_selection(client, dataset_csv):
 def test_reasoning_is_disabled_without_bedrock(client, dataset_csv):
     experiment_id = client.post(
         "/api/v1/experiments",
-        json={"name": "x", "dataset_uri": str(dataset_csv), "target_column": "churned"},
+        json={"name": "x", "dataset_uri": dataset_csv, "target_column": "churned"},
     ).json()["experiment_id"]
     response = client.post(f"/api/v1/experiments/{experiment_id}/reasoning", json={})
     assert response.status_code == 503
@@ -132,7 +135,7 @@ def test_every_response_carries_a_request_id(client):
 def test_experiments_can_be_listed_and_soft_deleted(client, dataset_csv):
     experiment_id = client.post(
         "/api/v1/experiments",
-        json={"name": "x", "dataset_uri": str(dataset_csv), "target_column": "churned"},
+        json={"name": "x", "dataset_uri": dataset_csv, "target_column": "churned"},
     ).json()["experiment_id"]
     listing = client.get("/api/v1/experiments").json()
     assert listing["count"] == 1

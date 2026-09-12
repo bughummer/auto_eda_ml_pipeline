@@ -116,7 +116,7 @@ def _handler(args: argparse.Namespace, store: ObjectStore, layout: ExperimentLay
         store,
         layout,
         experiment_id=args.experiment_id,
-        state_writer=build_state_writer(args.experiments_table, args.region),
+        state_writer=build_state_writer(store, layout, enabled=not args.no_record_state),
     )
 
 
@@ -124,11 +124,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = base_parser("ML Factory evaluation job (comparison and experiment summary)")
     parser.prog = "evaluation-job"
     parser.add_argument(
-        "--experiments-table",
-        default=None,
-        help="DynamoDB table holding experiment records. Omit to skip the state update.",
+        "--no-record-state",
+        action="store_true",
+        help="Build the reports without writing the terminal experiment state.",
     )
-    parser.add_argument("--region", default=None)
     return parser
 
 

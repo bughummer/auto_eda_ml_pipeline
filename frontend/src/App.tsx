@@ -19,7 +19,7 @@ export function App() {
         </Typography.Title>
         {health && (
           <Typography.Text style={{ color: 'rgba(255,255,255,0.65)' }}>
-            {health.mode} mode · {health.orchestrator} orchestrator
+            {health.artifact_root} · {health.orchestrator}
           </Typography.Text>
         )}
       </Layout.Header>

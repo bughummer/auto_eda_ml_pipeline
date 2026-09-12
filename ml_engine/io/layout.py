@@ -10,6 +10,9 @@ from ml_engine.io.uri import join_uri
 
 ARTIFACT_NAMESPACE = "ml-factory/experiments"
 
+DEFINITION_FILE = "experiment.json"
+CONTROL_STATE_FILE = "state/control.json"
+WORKFLOW_STATE_FILE = "state/workflow.json"
 EDA_FILE = "eda/eda.json"
 LEAKAGE_FILE = "eda/leakage.json"
 EXPERIMENT_CONFIG_FILE = "config/experiment_config.json"
@@ -39,11 +42,28 @@ class ExperimentLayout:
 
     @classmethod
     def for_experiment(cls, root: str, experiment_id: str) -> "ExperimentLayout":
-        """``root`` is the artifact bucket URI (or local root directory)."""
+        """``root`` is the artifact bucket URI."""
         return cls(base=join_uri(root, ARTIFACT_NAMESPACE, experiment_id))
+
+    @staticmethod
+    def experiments_prefix(root: str) -> str:
+        """Where every experiment under an artifact root lives. Used to list them."""
+        return join_uri(root, ARTIFACT_NAMESPACE) + "/"
 
     def path(self, *parts: str) -> str:
         return join_uri(self.base, *parts)
+
+    @property
+    def definition(self) -> str:
+        return self.path(DEFINITION_FILE)
+
+    @property
+    def control_state(self) -> str:
+        return self.path(CONTROL_STATE_FILE)
+
+    @property
+    def workflow_state(self) -> str:
+        return self.path(WORKFLOW_STATE_FILE)
 
     @property
     def eda(self) -> str:

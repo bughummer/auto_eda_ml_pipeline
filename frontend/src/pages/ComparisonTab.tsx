@@ -8,8 +8,8 @@ import type { ModelComparisonEntry } from '../api/types';
 import { QueryState } from '../components/common';
 import { MODEL_STATUS_COLORS, formatDuration, formatNumber, humanize } from '../lib/format';
 
-export function ComparisonTab({ experimentId }: { experimentId: string }) {
-  const { data, isLoading, error } = useComparison(experimentId);
+export function ComparisonTab({ experimentId, root }: { experimentId: string; root?: string }) {
+  const { data, isLoading, error } = useComparison(experimentId, root);
   const [openModel, setOpenModel] = useState<string | null>(null);
 
   return (
@@ -121,7 +121,9 @@ export function ComparisonTab({ experimentId }: { experimentId: string }) {
             title={openModel ? `Model detail — ${openModel}` : ''}
             destroyOnClose
           >
-            {openModel && <ModelDetail experimentId={experimentId} modelName={openModel} />}
+            {openModel && (
+              <ModelDetail experimentId={experimentId} modelName={openModel} root={root} />
+            )}
           </Drawer>
         </>
       )}
@@ -129,8 +131,16 @@ export function ComparisonTab({ experimentId }: { experimentId: string }) {
   );
 }
 
-function ModelDetail({ experimentId, modelName }: { experimentId: string; modelName: string }) {
-  const { data, isLoading, error } = useModelMetadata(experimentId, modelName);
+function ModelDetail({
+  experimentId,
+  modelName,
+  root,
+}: {
+  experimentId: string;
+  modelName: string;
+  root?: string;
+}) {
+  const { data, isLoading, error } = useModelMetadata(experimentId, modelName, root);
 
   return (
     <QueryState isLoading={isLoading} error={error}>

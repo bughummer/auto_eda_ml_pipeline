@@ -3,18 +3,14 @@
   "StartAt": "MarkEdaRunning",
   "States": {
     "MarkEdaRunning": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "EDA_RUNNING" },
-          ":stage": { "S": "profiling" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"EDA_RUNNING\",\"current_stage\":\"profiling\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "Next": "RunProfiling"
@@ -27,7 +23,11 @@
         "RoleArn": "${JobRoleArn}",
         "AppSpecification": {
           "ImageUri": "${JobImageUri}",
-          "ContainerEntrypoint": ["python", "-m", "jobs.profiling.main"],
+          "ContainerEntrypoint": [
+            "python",
+            "-m",
+            "jobs.profiling.main"
+          ],
           "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix, '--dataset-uri', $.dataset_s3_uri, '--target-column', $.target_column, '--file-format', $.file_format)"
         },
         "ProcessingResources": {
@@ -42,36 +42,45 @@
           "EnableInterContainerTrafficEncryption": true,
           "EnableNetworkIsolation": false
         },
-        "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} },
-        "Environment": { "ML_FACTORY_LOG_LEVEL": "INFO" }
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": ${MaxRuntimeSeconds}
+        },
+        "Environment": {
+          "ML_FACTORY_LOG_LEVEL": "INFO"
+        }
       },
       "ResultPath": "$.profiling_result",
       "Retry": [
         {
-          "ErrorEquals": ["SageMaker.AmazonSageMakerException", "SageMaker.ResourceLimitExceededException"],
+          "ErrorEquals": [
+            "SageMaker.AmazonSageMakerException",
+            "SageMaker.ResourceLimitExceededException"
+          ],
           "IntervalSeconds": 30,
           "MaxAttempts": 3,
           "BackoffRate": 2
         }
       ],
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
       ],
       "Next": "MarkEdaCompleted"
     },
     "MarkEdaCompleted": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "EDA_COMPLETED" },
-          ":stage": { "S": "eda_completed" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"EDA_COMPLETED\",\"current_stage\":\"eda_completed\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "Next": "MarkFeatureReview"
@@ -79,36 +88,25 @@
     "MarkFeatureReview": {
       "Comment": "Feature review is human time, so the execution ends here rather than waiting. Training is a separate execution started by the control plane.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "FEATURE_REVIEW" },
-          ":stage": { "S": "feature_review" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"FEATURE_REVIEW\",\"current_stage\":\"feature_review\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "End": true
     },
     "MarkFailed": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, failure_code = :code, failure_message = :message, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "FAILED" },
-          ":stage": { "S": "profiling" },
-          ":code": { "S": "EDA_JOB_FAILED" },
-          ":message": { "S.$": "States.Format('The profiling job did not complete: {}', $.error.Cause)" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"FAILED\",\"current_stage\":\"profiling\",\"failure_code\":\"EDA_JOB_FAILED\",\"failure_message\":\"The stage did not complete. Its failure artifact and the execution history carry the detail: {}\"}}', $.experiment_id, $$.State.EnteredTime, $$.Execution.Id)"
       },
       "ResultPath": null,
       "Next": "EdaFailed"

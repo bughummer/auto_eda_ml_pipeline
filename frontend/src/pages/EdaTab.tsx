@@ -7,8 +7,8 @@ import type { ColumnProfile } from '../api/types';
 import { QueryState, WarningsTable } from '../components/common';
 import { formatBytes, formatNumber, formatPercent, humanize } from '../lib/format';
 
-export function EdaTab({ experimentId }: { experimentId: string }) {
-  const { data, isLoading, error } = useEda(experimentId);
+export function EdaTab({ experimentId, root }: { experimentId: string; root?: string }) {
+  const { data, isLoading, error } = useEda(experimentId, root);
 
   return (
     <QueryState isLoading={isLoading} error={error} pendingMessage="EDA has not finished yet">

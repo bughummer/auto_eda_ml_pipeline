@@ -1,132 +1,154 @@
-"""Experiment record persistence.
+"""Experiment records, stored in the artifact bucket.
 
-Small, queryable control-plane state only — status, ownership, dataset identity and the
-headline result. Large ML artifacts always live in the object store.
+One store, one place to look: an experiment's state sits under the same prefix as its EDA,
+its models and its comparison. Listing experiments is an S3 prefix listing; reading one is
+two small GETs.
+
+Each of the three documents has a single writer, so no component performs a read-modify-write
+and two writers can never lose each other's fields. See ``ml_engine.contracts.experiment``.
 """
 
-import threading
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from backend.errors import NotFoundError, UpstreamError
-from ml_engine.contracts.experiment import ExperimentRecord
+from backend.errors import NotFoundError
+from ml_engine.contracts.experiment import (
+    ControlPlaneState,
+    ExperimentDefinition,
+    ExperimentRecord,
+    WorkflowState,
+)
+from ml_engine.io import ExperimentLayout, ObjectStore, read_model_if_exists, write_model
+
+LOGGER = logging.getLogger("ml_factory.repositories")
+
+#: Records are read in parallel; a listing of hundreds should not take hundreds of round trips.
+LIST_CONCURRENCY = 16
+
+#: Fields owned by the control plane. Anything else belongs to the workflow.
+_CONTROL_FIELDS = frozenset(ControlPlaneState.model_fields) - {
+    "experiment_id",
+    "updated_at",
+    "status_updated_at",
+}
 
 
 class ExperimentRepository(Protocol):
-    def create(self, record: ExperimentRecord) -> ExperimentRecord: ...
+    def create(self, definition: ExperimentDefinition) -> ExperimentRecord: ...
 
-    def get(self, experiment_id: str) -> ExperimentRecord: ...
+    def get(self, experiment_id: str, root: str | None = None) -> ExperimentRecord: ...
 
-    def list(self, limit: int = 100, created_by: str | None = None) -> list[ExperimentRecord]: ...
+    def list(
+        self, limit: int = 100, created_by: str | None = None, root: str | None = None
+    ) -> list[ExperimentRecord]: ...
 
     def update(self, experiment_id: str, **changes: Any) -> ExperimentRecord: ...
 
     def delete(self, experiment_id: str) -> None: ...
 
 
-class InMemoryExperimentRepository:
-    """Used in local mode and in tests. Thread-safe because the local runner is threaded."""
+class ObjectStoreExperimentRepository:
+    """Reads and writes experiment records through the object store.
 
-    def __init__(self) -> None:
-        self._records: dict[str, ExperimentRecord] = {}
-        self._lock = threading.RLock()
+    ``root`` is the artifact root new experiments are created under. Reads accept a different
+    root, which is what lets the UI open an experiment from any approved artifact bucket.
+    """
 
-    def create(self, record: ExperimentRecord) -> ExperimentRecord:
-        with self._lock:
-            self._records[record.experiment_id] = record
-            return record.model_copy(deep=True)
+    def __init__(self, store: ObjectStore, root: str) -> None:
+        self._store = store
+        self._root = root.rstrip("/")
 
-    def get(self, experiment_id: str) -> ExperimentRecord:
-        with self._lock:
-            record = self._records.get(experiment_id)
-            if record is None or record.deleted:
-                raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
-            return record.model_copy(deep=True)
+    @property
+    def root(self) -> str:
+        return self._root
 
-    def list(self, limit: int = 100, created_by: str | None = None) -> list[ExperimentRecord]:
-        with self._lock:
-            records = [r for r in self._records.values() if not r.deleted]
-        if created_by:
-            records = [r for r in records if r.created_by == created_by]
-        records.sort(key=lambda r: r.created_at, reverse=True)
-        return [r.model_copy(deep=True) for r in records[:limit]]
+    # --- writes -----------------------------------------------------------
+    def create(self, definition: ExperimentDefinition) -> ExperimentRecord:
+        layout = ExperimentLayout(base=definition.artifact_prefix)
+        if self._store.exists(layout.definition):
+            raise ValueError(f"Experiment '{definition.experiment_id}' already exists")
+        write_model(self._store, layout.definition, definition)
+        control = ControlPlaneState(
+            experiment_id=definition.experiment_id,
+            updated_at=definition.created_at,
+            status_updated_at=definition.created_at,
+        )
+        write_model(self._store, layout.control_state, control)
+        return ExperimentRecord.compose(definition, control, None)
 
     def update(self, experiment_id: str, **changes: Any) -> ExperimentRecord:
-        with self._lock:
-            record = self._records.get(experiment_id)
-            if record is None or record.deleted:
-                raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
-            updated = record.model_copy(update={**changes, "updated_at": datetime.now(UTC)})
-            self._records[experiment_id] = updated
-            return updated.model_copy(deep=True)
+        """Update the control-plane document only; workflow fields are not ours to write."""
+        unknown = set(changes) - _CONTROL_FIELDS
+        if unknown:
+            raise ValueError(
+                f"The control plane does not own {sorted(unknown)}; those fields are written "
+                "by the workflow."
+            )
+        layout = self._layout(experiment_id)
+        definition = self._definition(layout, experiment_id)
+        current = read_model_if_exists(
+            self._store, layout.control_state, ControlPlaneState
+        ) or ControlPlaneState(experiment_id=experiment_id, updated_at=definition.created_at)
+        now = datetime.now(UTC)
+        # Claiming the status block is explicit: writing an execution ARN or a model list
+        # must not take the status back from a workflow that has moved on.
+        if "status" in changes:
+            changes = {**changes, "status_updated_at": now}
+        updated = current.model_copy(update={**changes, "updated_at": now})
+        write_model(self._store, layout.control_state, updated)
+        workflow = read_model_if_exists(self._store, layout.workflow_state, WorkflowState)
+        return ExperimentRecord.compose(definition, updated, workflow)
 
     def delete(self, experiment_id: str) -> None:
+        """Soft delete: the record is hidden, every artifact stays for audit."""
         self.update(experiment_id, deleted=True)
 
-
-class DynamoExperimentRepository:
-    """DynamoDB-backed records. One item per experiment, keyed by ``experiment_id``."""
-
-    def __init__(self, table: Any) -> None:
-        self._table = table
-
-    def create(self, record: ExperimentRecord) -> ExperimentRecord:
-        self._put(record)
+    # --- reads ------------------------------------------------------------
+    def get(self, experiment_id: str, root: str | None = None) -> ExperimentRecord:
+        layout = self._layout(experiment_id, root)
+        record = self._read(layout)
+        if record is None or record.deleted:
+            raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
         return record
 
-    def get(self, experiment_id: str) -> ExperimentRecord:
-        try:
-            response = self._table.get_item(Key={"experiment_id": experiment_id})
-        except Exception as exc:
-            raise UpstreamError(
-                f"Could not read experiment '{experiment_id}' from DynamoDB."
-            ) from exc
-        item = response.get("Item")
-        if not item or item.get("deleted"):
-            raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
-        return _from_item(item)
-
-    def list(self, limit: int = 100, created_by: str | None = None) -> list[ExperimentRecord]:
-        try:
-            response = self._table.scan(Limit=max(limit * 2, limit))
-        except Exception as exc:
-            raise UpstreamError("Could not list experiments from DynamoDB.") from exc
-        records = [
-            _from_item(item) for item in response.get("Items", []) if not item.get("deleted")
-        ]
+    def list(
+        self, limit: int = 100, created_by: str | None = None, root: str | None = None
+    ) -> list[ExperimentRecord]:
+        prefixes = self._store.list_prefixes(
+            ExperimentLayout.experiments_prefix(root or self._root)
+        )
+        if not prefixes:
+            return []
+        with ThreadPoolExecutor(max_workers=LIST_CONCURRENCY) as pool:
+            records = list(
+                pool.map(
+                    lambda prefix: self._read(ExperimentLayout(base=prefix.rstrip("/"))), prefixes
+                )
+            )
+        found = [record for record in records if record is not None and not record.deleted]
         if created_by:
-            records = [r for r in records if r.created_by == created_by]
-        records.sort(key=lambda r: r.created_at, reverse=True)
-        return records[:limit]
+            found = [record for record in found if record.created_by == created_by]
+        found.sort(key=lambda record: record.created_at, reverse=True)
+        return found[:limit]
 
-    def update(self, experiment_id: str, **changes: Any) -> ExperimentRecord:
-        record = self.get(experiment_id)
-        updated = record.model_copy(update={**changes, "updated_at": datetime.now(UTC)})
-        self._put(updated)
-        return updated
+    # --- helpers ----------------------------------------------------------
+    def _read(self, layout: ExperimentLayout) -> ExperimentRecord | None:
+        definition = read_model_if_exists(self._store, layout.definition, ExperimentDefinition)
+        if definition is None:
+            return None
+        return ExperimentRecord.compose(
+            definition,
+            read_model_if_exists(self._store, layout.control_state, ControlPlaneState),
+            read_model_if_exists(self._store, layout.workflow_state, WorkflowState),
+        )
 
-    def delete(self, experiment_id: str) -> None:
-        self.update(experiment_id, deleted=True)
+    def _definition(self, layout: ExperimentLayout, experiment_id: str) -> ExperimentDefinition:
+        definition = read_model_if_exists(self._store, layout.definition, ExperimentDefinition)
+        if definition is None:
+            raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
+        return definition
 
-    def _put(self, record: ExperimentRecord) -> None:
-        try:
-            self._table.put_item(Item=_to_item(record))
-        except Exception as exc:
-            raise UpstreamError(
-                f"Could not persist experiment '{record.experiment_id}' to DynamoDB."
-            ) from exc
-
-
-def _to_item(record: ExperimentRecord) -> dict[str, Any]:
-    """DynamoDB rejects empty strings and floats; serialize through JSON mode and clean up."""
-    item = record.model_dump(mode="json")
-    return {key: value for key, value in item.items() if value not in ("", None)}
-
-
-def _from_item(item: dict[str, Any]) -> ExperimentRecord:
-    from decimal import Decimal
-
-    cleaned = {
-        key: (float(value) if isinstance(value, Decimal) else value) for key, value in item.items()
-    }
-    return ExperimentRecord.model_validate(cleaned)
+    def _layout(self, experiment_id: str, root: str | None = None) -> ExperimentLayout:
+        return ExperimentLayout.for_experiment(root or self._root, experiment_id)

@@ -2,7 +2,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front demo openapi docker-build docker-up docker-down docker-logs clean
+.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front openapi deploy-aws docker-build docker-up docker-down docker-logs clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -42,8 +42,11 @@ front: ## run the Vite dev server
 dev: ## run API and frontend together
 	$(MAKE) -j2 api front
 
-demo: ## generate a sample dataset and run a full local experiment
-	$(PY) scripts/run_local_demo.py
+deploy-aws: ## build and push the job image, upload the workflows, deploy the stack
+	./scripts/deploy_aws.sh
+
+sample-data: ## generate sample datasets to upload to an approved S3 prefix
+	$(PY) scripts/sample_data.py
 
 openapi: ## export the OpenAPI document for the frontend
 	$(PY) scripts/export_openapi.py
@@ -61,4 +64,4 @@ docker-logs: ## follow the container logs
 	docker compose logs -f ml-factory
 
 clean:
-	rm -rf .pytest_cache .ruff_cache var/ml-factory frontend/dist
+	rm -rf .pytest_cache .ruff_cache var frontend/dist

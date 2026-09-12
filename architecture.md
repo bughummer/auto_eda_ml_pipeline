@@ -34,9 +34,10 @@ real-time inference serving, automated model deployment, hyperparameter search.
    The backend and the frontend never invent workflow state.
 4. **The browser never touches AWS.** React talks only to FastAPI. No AWS credentials,
    no presigned-URL-driven logic, no direct S3 reads from the browser in v1.0.
-5. **Everything reproducible.** Every experiment writes an immutable, self-describing set of
-   JSON artifacts under a predictable S3 prefix, including dataset identity, seeds, package
-   versions and hyperparameters.
+5. **Everything reproducible, in one place.** Every experiment — its record, its EDA, its
+   configuration, its models and its reports — is a set of JSON objects under one predictable
+   S3 prefix, including dataset identity, seeds, package versions and hyperparameters. There
+   is no separate state store to keep in sync, and copying a prefix copies the experiment.
 6. **Suspicion is surfaced, not enforced.** Deterministic checks recommend; the data
    scientist decides. Only the target column is excluded from features automatically.
 7. **Vertical slices over scaffolding.** Each phase delivers a path that works end to end.
@@ -49,12 +50,14 @@ real-time inference serving, automated model deployment, hyperparameter search.
  │ React + AntD │ ◀──────────│  plane (corp server) │
  └──────────────┘   JSON     └──────────┬───────────┘
                                         │ boto3 (corporate proxy)
-                        ┌───────────────┼───────────────┬───────────────┐
-                        ▼               ▼               ▼               ▼
-                 ┌────────────┐  ┌─────────────┐  ┌──────────┐   ┌──────────┐
-                 │  Step      │  │  DynamoDB   │  │    S3    │   │ Bedrock  │
-                 │  Functions │  │ experiments │  │artifacts │   │(reasoning)│
-                 └─────┬──────┘  └─────────────┘  └────┬─────┘   └──────────┘
+                        ┌───────────────┬───────────────────┬───────────────┐
+                        ▼               ▼                   ▼               │
+                 ┌────────────┐  ┌────────────────┐  ┌───────────┐          │
+                 │  Step      │  │       S3       │  │  Bedrock  │   no database:
+                 │  Functions │  │ artifacts AND  │  │(reasoning)│   records are
+                 └─────┬──────┘  │ experiment     │  └───────────┘   objects in S3
+                       │         │ records        │
+                       │         └────┬───────────┘
                        │ ephemeral jobs                │
         ┌──────────────┼───────────────────┐           │
         ▼              ▼                   ▼           │
@@ -100,9 +103,9 @@ backend/          FastAPI control plane
   api/routes/     HTTP surface
   schemas/        request/response models (API-only; artifact schemas come from ml_engine)
   services/       use cases (experiment lifecycle, artifacts, dictionary, reasoning)
-  repositories/   experiment record persistence (DynamoDB | in-memory)
-  orchestration/  ExperimentOrchestrator protocol: Step Functions | local runner
-  aws/            boto3 session/client construction, proxy config, S3/SFN/DDB/Bedrock adapters
+  repositories/   experiment record persistence (S3 objects beside the artifacts)
+  orchestration/  ExperimentOrchestrator protocol, implemented by Step Functions
+  aws/            boto3 session/client construction, proxy and credential config
 
 frontend/         React 18 + TypeScript + Vite + Ant Design + TanStack Query
 infrastructure/   Step Functions ASL, IAM policies, CloudFormation, container images
@@ -148,7 +151,8 @@ any stage ─▶ FAILED
 Rules:
 
 * The backend writes `CREATED` and `READY_FOR_TRAINING` (user-driven transitions).
-* Step Functions writes every execution-driven transition via the DynamoDB SDK integration.
+* Step Functions writes every execution-driven transition to `state/workflow.json` via the
+  `s3:putObject` SDK integration.
 * `COMPLETED_WITH_WARNINGS` is used when the experiment produced a usable comparison but at
   least one model failed, or an evaluation/warning threshold was crossed.
 * The frontend renders status; it never derives or guesses it.
@@ -156,9 +160,25 @@ Rules:
 
 State ownership summary:
 
+Every experiment record is three small JSON objects under the experiment's own prefix, each
+with exactly one writer, so nothing ever performs a read-modify-write on shared state:
+
+| Object | Written by | Contents |
+|---|---|---|
+| `experiment.json` | the control plane, once | name, dataset identity, target, owner, prefix |
+| `state/control.json` | the control plane | user-driven transitions, execution ARNs, requested models |
+| `state/workflow.json` | Step Functions and the evaluation job | execution-driven status, stage, best model, failure |
+
+The API returns the composition of the three. Ownership of the *status* is explicit: the
+control plane claims it only when it actually sets a status, so recording an execution ARN
+cannot take a stage back from a workflow that has moved on.
+
+Per-model progress is not stored at all — it is derived from the model artifacts, which are
+the source of truth: metadata means the model succeeded, a failure record means it failed.
+
 | Data | Owner | Store |
 |---|---|---|
-| Experiment record (status, stage, dataset, target, best model) | Backend + Step Functions | DynamoDB |
+| Experiment records | Backend + Step Functions | S3, beside the artifacts |
 | Workflow execution position, retries | Step Functions | Step Functions |
 | All ML artifacts (EDA, config, models, metrics, reports) | Jobs | S3 |
 | Nothing | Frontend | — |
@@ -171,7 +191,7 @@ Base path `/api/v1`. All errors use the shared envelope in §10.
 |---|---|---|
 | GET | `/health` | liveness + dependency mode report |
 | POST | `/experiments` | create experiment, start EDA. Returns `{experiment_id, status}` immediately |
-| GET | `/experiments` | list experiment records (paged) |
+| GET | `/experiments` | list experiment records; `?root=` lists another approved artifact bucket |
 | GET | `/experiments/{id}` | experiment record incl. status, stage, best model |
 | DELETE | `/experiments/{id}` | soft-delete the record (artifacts retained) |
 | GET | `/experiments/{id}/eda` | `EdaReport` artifact |
@@ -190,6 +210,10 @@ Base path `/api/v1`. All errors use the shared envelope in §10.
 | GET | `/experiments/{id}/reasoning` | latest `ReasoningReport` |
 | GET | `/models` | model plugin catalogue (name, problem types, defaults) |
 
+Every read endpoint accepts an optional `root` query parameter naming an approved artifact
+bucket, which is how the UI shows experiments produced by another environment. Only configured
+roots are accepted, and writes always target the platform's own bucket.
+
 Requests and responses are Pydantic v2 models. Artifact-shaped responses reuse the exact
 `ml_engine.contracts` models so a schema can never drift between producer and consumer.
 
@@ -197,6 +221,9 @@ Requests and responses are Pydantic v2 models. Artifact-shaped responses reuse t
 
 ```
 s3://<artifact-bucket>/ml-factory/experiments/<experiment_id>/
+  experiment.json                       ExperimentDefinition (immutable)
+  state/control.json                    ControlPlaneState
+  state/workflow.json                   WorkflowState
   eda/eda.json                          EdaReport
   eda/leakage.json                      LeakageReport
   config/experiment_config.json         ExperimentConfig (frozen at training start)
@@ -234,7 +261,7 @@ ephemeral — it starts, writes artifacts to S3, and terminates.
 Step Functions state machine (`infrastructure/stepfunctions/experiment_state_machine.asl.json`):
 
 ```
-StartAt: MarkEdaRunning (DynamoDB UpdateItem)
+StartAt: MarkEdaRunning (s3:putObject -> state/workflow.json)
   → RunProfiling (SageMaker CreateProcessingJob.sync)
   → MarkEdaCompleted → wait for the user (execution ends; feature review is human time)
 
@@ -297,14 +324,13 @@ Single error envelope for the whole API:
 ## 11. Security
 
 * IAM: three roles — `MlFactoryBackendRole` (control plane: `states:StartExecution`,
-  `states:DescribeExecution`, DynamoDB CRUD on one table, `s3:GetObject/PutObject` limited to
-  the artifact prefix, `s3:ListBucket`/`GetObject` on approved dataset buckets,
+  `states:DescribeExecution`, `s3:GetObject/PutObject` limited to the artifact prefix, `s3:ListBucket`/`GetObject` on approved dataset buckets,
   `bedrock:InvokeModel` on allow-listed model ids),
   `MlFactoryWorkflowRole` (Step Functions: create/describe SageMaker jobs, `iam:PassRole` to
-  the job role, DynamoDB UpdateItem on the experiments table),
+  the job role, `s3:PutObject` limited to `…/experiments/*/state/*`),
   `MlFactoryJobRole` (SageMaker containers: read approved dataset prefixes, read/write the
   experiment artifact prefix, CloudWatch Logs). Policies in `infrastructure/iam/`.
-* KMS: artifact bucket and DynamoDB table use a customer-managed key; the job role and the
+* KMS: the artifact bucket uses a customer-managed key; the job role and the
   backend role get `kms:Decrypt`/`GenerateDataKey` on that key only.
 * Dataset allow-list: the backend rejects any dataset URI whose bucket/prefix is not in
   `ML_FACTORY_ALLOWED_DATASET_PREFIXES`. This is enforced before any AWS call.
@@ -326,22 +352,32 @@ Single error envelope for the whole API:
 |---|---|---|
 | AD-1 | Contracts live in `ml_engine/contracts` and are reused verbatim by the API | one schema, no producer/consumer drift |
 | AD-2 | Two Step Functions executions per experiment (EDA, then training) rather than one with a callback wait | feature review is human-scale time; a `waitForTaskToken` execution open for days is fragile and costs nothing to avoid |
-| AD-3 | DynamoDB from v1 instead of deriving state from Step Functions | listing experiments, user ownership and best-model summary are queries Step Functions cannot answer cheaply |
-| AD-4 | `ObjectStore` + `ExperimentOrchestrator` protocols with local implementations | the entire vertical slice runs and is tested without AWS; the AWS path is one adapter, not a fork of the logic |
+| AD-3 | ~~DynamoDB for experiment records~~ — **superseded by AD-11** | listing experiments is a query Step Functions cannot answer cheaply, so some record store was needed |
+| AD-4 | `ObjectStore` + `ExperimentOrchestrator` protocols, with the substitutes living in the test suite | the entire vertical slice is testable without AWS, while the product keeps exactly one wiring (see AD-12) |
 | AD-5 | Preprocessing is fitted in the preparation job and persisted, not refitted per model | guarantees every model sees identical features and prevents fit-on-validation leakage |
 | AD-6 | One SageMaker Training job per model via a `Map` state | isolates failures, parallelizes, and keeps the state machine independent of the model catalogue |
 | AD-7 | Optional model libraries register conditionally | a missing CatBoost wheel degrades the catalogue, it does not break the platform |
 | AD-8 | The S3 adapter lives inside `ml_engine/io` with a lazy `boto3` import | the control plane and the jobs share one implementation instead of duplicating it; `import ml_engine` still works without the AWS SDK. The Bedrock client is injected, so it needs no such exception |
 | AD-9 | The evaluation job writes the terminal experiment state; Step Functions writes every other transition | whether a run is `COMPLETED` or `COMPLETED_WITH_WARNINGS` depends on the comparison the job computes. Re-deriving that in the state machine would duplicate the judgement; `ml_engine.reporting.final_status` stays the single place it is made |
 | AD-10 | The preparation job fits one pipeline per required preprocessing strategy (dense one-hot, native categorical) rather than one overall | CatBoost consumes categories natively while linear models need a dense matrix. Both are still fitted on the training fold only, so the guarantee in AD-5 holds for every model |
+| AD-11 | Experiment records live in the artifact bucket as three single-writer JSON objects; DynamoDB is removed (supersedes AD-3) | the platform then uses exactly two AWS data services — S3 and SageMaker — instead of three. An experiment becomes one self-contained prefix: copyable, auditable and restorable without a database. Listing is a prefix listing with a delimiter, and Step Functions writes stage transitions with the `s3:putObject` SDK integration, so the "cheap query" argument behind AD-3 no longer holds |
+| AD-12 | No local execution mode: the platform is AWS-only, and the in-process runner is a test double under `tests/support/` | two supported runtimes meant two behaviours to reason about for no production benefit. The end-to-end tests still exercise the real job code through the same contracts, against an in-memory store addressed exactly as S3 is |
+| AD-13 | Any configured artifact bucket can be browsed read-only from the UI | experiment results are already self-contained in their prefix, so showing another environment's results costs one query parameter rather than a second deployment or a shared database. Writes always target the platform's own bucket |
 
-## 13. Local development
+## 13. Development
 
-`ML_FACTORY_MODE=local` (default in `.env.example`) selects the local adapters:
-`LocalObjectStore` (a directory tree that mirrors the S3 layout) and `LocalOrchestrator`
-(runs the same `jobs/*` entrypoints in a background thread pool, in dependency order).
-The same contracts, the same job code, the same artifacts — only the boundary adapters differ.
-`ML_FACTORY_MODE=aws` selects S3 + Step Functions + DynamoDB.
+There is one runtime: AWS. No second code path exists for running the ML anywhere else.
 
-`make dev` runs the API on :8000 and Vite on :5173 with a proxy to the API.
-`make test` runs pytest; `make lint` runs ruff. See `README.md`.
+Development and the test suite substitute two *adapters* — never a second application wiring:
+
+* `tests/support/memory_store.py` — an object store addressed with real `s3://` URIs, so URI
+  parsing, the dataset allow-list, prefix listing and the artifact layout are all under test.
+* `tests/support/inline_orchestrator.py` — runs the same `jobs/*` entrypoints in-process, in
+  the same order, writing the same `state/workflow.json` the state machine writes.
+
+`build_container()` and `create_app()` accept those adapters as arguments, which is why the
+product needs no local mode: the seam already exists for tests, and nothing more is required.
+
+`make dev` runs the API on :8000 and Vite on :5173 with a proxy to the API. `make test` runs
+pytest; `make lint` runs ruff; `make deploy-aws` builds and pushes the job image, uploads the
+workflow definitions and deploys the stack. See `README.md`.

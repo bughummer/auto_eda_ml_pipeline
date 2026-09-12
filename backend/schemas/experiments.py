@@ -51,6 +51,12 @@ class CreateExperimentResponse(StrictModel):
 class ExperimentListResponse(StrictModel):
     experiments: list[ExperimentRecord]
     count: int
+    root: str = Field(
+        default="", description="The artifact bucket these experiments were read from."
+    )
+    available_roots: list[str] = Field(
+        default_factory=list, description="Artifact buckets this platform may read."
+    )
 
 
 class FeatureReviewItem(StrictModel):
@@ -158,9 +164,9 @@ class TrainingStatusResponse(StrictModel):
 
 class HealthResponse(StrictModel):
     status: str
-    mode: str
     orchestrator: str
     artifact_root: str
+    artifact_roots: list[str] = Field(default_factory=list)
     credential_source: str = Field(
         default="", description="How AWS credentials are obtained. Never contains a credential."
     )

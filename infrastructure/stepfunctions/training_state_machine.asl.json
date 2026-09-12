@@ -3,18 +3,14 @@
   "StartAt": "MarkPreparing",
   "States": {
     "MarkPreparing": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "PREPARING" },
-          ":stage": { "S": "preparation" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"PREPARING\",\"current_stage\":\"preparation\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "Next": "RunPreparation"
@@ -28,7 +24,11 @@
         "RoleArn": "${JobRoleArn}",
         "AppSpecification": {
           "ImageUri": "${JobImageUri}",
-          "ContainerEntrypoint": ["python", "-m", "jobs.preprocessing.main"],
+          "ContainerEntrypoint": [
+            "python",
+            "-m",
+            "jobs.preprocessing.main"
+          ],
           "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix)"
         },
         "ProcessingResources": {
@@ -39,35 +39,41 @@
             "VolumeKmsKeyId": "${KmsKeyId}"
           }
         },
-        "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} }
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": ${MaxRuntimeSeconds}
+        }
       },
       "ResultPath": "$.preparation_result",
       "Retry": [
         {
-          "ErrorEquals": ["SageMaker.ResourceLimitExceededException"],
+          "ErrorEquals": [
+            "SageMaker.ResourceLimitExceededException"
+          ],
           "IntervalSeconds": 60,
           "MaxAttempts": 3,
           "BackoffRate": 2
         }
       ],
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
       ],
       "Next": "MarkTraining"
     },
     "MarkTraining": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "TRAINING" },
-          ":stage": { "S": "training" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"TRAINING\",\"current_stage\":\"training\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "Next": "TrainModels"
@@ -110,20 +116,30 @@
                 "VolumeSizeInGB": ${TrainingVolumeSizeGb},
                 "VolumeKmsKeyId": "${KmsKeyId}"
               },
-              "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} },
+              "StoppingCondition": {
+                "MaxRuntimeInSeconds": ${MaxRuntimeSeconds}
+              },
               "EnableInterContainerTrafficEncryption": true
             },
             "ResultPath": "$.training_result",
             "Retry": [
               {
-                "ErrorEquals": ["SageMaker.ResourceLimitExceededException"],
+                "ErrorEquals": [
+                  "SageMaker.ResourceLimitExceededException"
+                ],
                 "IntervalSeconds": 60,
                 "MaxAttempts": 3,
                 "BackoffRate": 2
               }
             ],
             "Catch": [
-              { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "ModelFailed" }
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": "$.error",
+                "Next": "ModelFailed"
+              }
             ],
             "End": true
           },
@@ -142,24 +158,20 @@
       "Next": "MarkEvaluating"
     },
     "MarkEvaluating": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "EVALUATING" },
-          ":stage": { "S": "evaluation" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"EVALUATING\",\"current_stage\":\"evaluation\"}}', $.experiment_id, $$.State.EnteredTime)"
       },
       "ResultPath": null,
       "Next": "RunEvaluation"
     },
     "RunEvaluation": {
-      "Comment": "Builds comparison.json and experiment_summary.json, and writes the terminal experiment state (COMPLETED or COMPLETED_WITH_WARNINGS) because it is the component that computes it.",
+      "Comment": "Builds comparison.json and experiment_summary.json, and writes the terminal experiment state (COMPLETED or COMPLETED_WITH_WARNINGS) to state/workflow.json, because it is the component that computes it.",
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
       "Parameters": {
@@ -167,8 +179,12 @@
         "RoleArn": "${JobRoleArn}",
         "AppSpecification": {
           "ImageUri": "${JobImageUri}",
-          "ContainerEntrypoint": ["python", "-m", "jobs.evaluation.main"],
-          "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix, '--experiments-table', $.experiments_table, '--region', '${AwsRegion}')"
+          "ContainerEntrypoint": [
+            "python",
+            "-m",
+            "jobs.evaluation.main"
+          ],
+          "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix)"
         },
         "ProcessingResources": {
           "ClusterConfig": {
@@ -178,28 +194,31 @@
             "VolumeKmsKeyId": "${KmsKeyId}"
           }
         },
-        "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} }
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": ${MaxRuntimeSeconds}
+        }
       },
       "ResultPath": "$.evaluation_result",
       "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
       ],
       "End": true
     },
     "MarkFailed": {
+      "Comment": "The experiment record lives with the artifacts; each writer owns its own object.",
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
       "Parameters": {
-        "TableName.$": "$.experiments_table",
-        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
-        "UpdateExpression": "SET #status = :status, failure_code = :code, failure_message = :message, updated_at = :now",
-        "ExpressionAttributeNames": { "#status": "status" },
-        "ExpressionAttributeValues": {
-          ":status": { "S": "FAILED" },
-          ":code": { "S": "TRAINING_WORKFLOW_FAILED" },
-          ":message": { "S.$": "States.Format('The experiment stopped before producing a comparison: {}', $.error.Cause)" },
-          ":now": { "S.$": "$$.State.EnteredTime" }
-        }
+        "Bucket.$": "$.artifact_bucket",
+        "Key.$": "$.state_key",
+        "ContentType": "application/json",
+        "Body.$": "States.Format('{{\"experiment_id\":\"{}\",\"updated_at\":\"{}\",\"status\":\"FAILED\",\"current_stage\":\"training\",\"failure_code\":\"TRAINING_WORKFLOW_FAILED\",\"failure_message\":\"The stage did not complete. Its failure artifact and the execution history carry the detail: {}\"}}', $.experiment_id, $$.State.EnteredTime, $$.Execution.Id)"
       },
       "ResultPath": null,
       "Next": "TrainingFailed"

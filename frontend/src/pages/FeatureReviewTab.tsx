@@ -34,9 +34,16 @@ import { RISK_COLORS, RISK_LABELS, formatPercent, humanize } from '../lib/format
 
 const EXCLUSION_ACTIONS = new Set(['consider_excluding', 'strongly_consider_excluding']);
 
-export function FeatureReviewTab({ experimentId }: { experimentId: string }) {
+export function FeatureReviewTab({
+  experimentId,
+  root,
+}: {
+  experimentId: string;
+  root?: string;
+}) {
   const { message } = AntApp.useApp();
-  const { data, isLoading, error } = useFeatureReview(experimentId);
+  const { data, isLoading, error } = useFeatureReview(experimentId, root);
+  const isReadOnly = Boolean(root);
   const save = useSaveFeatures(experimentId);
   const uploadDictionary = useUploadDictionary(experimentId);
 
@@ -186,7 +193,12 @@ export function FeatureReviewTab({ experimentId }: { experimentId: string }) {
             >
               <Button size="small">Exclude visible</Button>
             </Popconfirm>
-            <Button type="primary" onClick={onSave} loading={save.isPending} disabled={selected.size === 0}>
+            <Button
+              type="primary"
+              onClick={onSave}
+              loading={save.isPending}
+              disabled={selected.size === 0 || isReadOnly}
+            >
               Save selection
             </Button>
           </Space>

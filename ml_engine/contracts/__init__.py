@@ -51,7 +51,12 @@ from ml_engine.contracts.eda import (
     NumericStats,
     TargetAnalysis,
 )
-from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.contracts.experiment import (
+    ControlPlaneState,
+    ExperimentDefinition,
+    ExperimentRecord,
+    WorkflowState,
+)
 from ml_engine.contracts.leakage import FeatureRisk, LeakageFinding, LeakageReport
 from ml_engine.contracts.metrics import ConfusionMatrix, MetricDefinition, MetricSet
 from ml_engine.contracts.model import (
@@ -88,6 +93,7 @@ __all__ = [
     "ComparisonReport",
     "ComputeConfig",
     "ConfusionMatrix",
+    "ControlPlaneState",
     "DataDictionary",
     "DataQualityConcern",
     "DatasetReference",
@@ -96,6 +102,7 @@ __all__ = [
     "EdaReport",
     "EnvironmentCapture",
     "ExperimentConfig",
+    "ExperimentDefinition",
     "ExperimentRecord",
     "ExperimentStatus",
     "ExperimentSummary",
@@ -134,5 +141,6 @@ __all__ = [
     "TargetAnalysis",
     "TrainingConfig",
     "WarningCategory",
+    "WorkflowState",
     "sort_warnings",
 ]

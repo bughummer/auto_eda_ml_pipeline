@@ -54,7 +54,7 @@ from ml_engine.contracts.config import (
 )
 from ml_engine.contracts.dictionary import DataDictionary
 from ml_engine.contracts.eda import EdaReport
-from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.contracts.experiment import ExperimentDefinition, ExperimentRecord
 from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.contracts.model import ModelFailure, ModelMetadata
 from ml_engine.evaluation import resolve_primary_metric, selectable_primary_metrics
@@ -107,39 +107,62 @@ class ExperimentService:
         dataset = self._validate_dataset(request.dataset_uri, request.file_format)
         experiment_id = _new_experiment_id()
         layout = ExperimentLayout.for_experiment(self._settings.artifact_root, experiment_id)
-        now = datetime.now(UTC)
 
-        record = ExperimentRecord(
-            experiment_id=experiment_id,
-            name=request.name,
-            created_by=user,
-            created_at=now,
-            updated_at=now,
-            dataset=dataset,
-            target_column=request.target_column,
-            requested_problem_type=request.problem_type,
-            status=ExperimentStatus.CREATED,
-            current_stage="created",
-            artifact_prefix=layout.base,
+        record = self._repository.create(
+            ExperimentDefinition(
+                experiment_id=experiment_id,
+                name=request.name,
+                created_by=user,
+                created_at=datetime.now(UTC),
+                dataset=dataset,
+                target_column=request.target_column,
+                requested_problem_type=request.problem_type,
+                artifact_prefix=layout.base,
+            )
         )
-        self._repository.create(record)
-
         handle = self._orchestrator.start_eda(record)
         LOGGER.info("Started EDA for %s (%s)", experiment_id, handle.execution_id)
+        # Only the execution reference is ours to record: the workflow writes every stage
+        # transition itself, so the control plane cannot overwrite a stage it has passed.
         return self._repository.update(experiment_id, eda_execution_arn=handle.execution_id)
 
-    def get(self, experiment_id: str) -> ExperimentRecord:
-        return self._repository.get(experiment_id)
+    def get(self, experiment_id: str, root: str | None = None) -> ExperimentRecord:
+        return self._repository.get(experiment_id, root=self._checked_root(root))
 
     def list(
-        self, limit: int | None = None, created_by: str | None = None
+        self,
+        limit: int | None = None,
+        created_by: str | None = None,
+        root: str | None = None,
     ) -> list[ExperimentRecord]:
+        """List experiments found under an artifact root.
+
+        With no root this is the platform's own bucket. With one, it is whatever previous
+        experiments exist under that approved bucket — which is how the UI shows results from
+        an environment other than the one it is running in.
+        """
         return self._repository.list(
             limit=min(
                 limit or self._settings.experiment_list_limit, self._settings.experiment_list_limit
             ),
             created_by=created_by,
+            root=self._checked_root(root),
         )
+
+    def artifact_roots(self) -> list[str]:
+        """Artifact roots the UI may offer, the writable one first."""
+        return self._settings.artifact_roots
+
+    def _checked_root(self, root: str | None) -> str | None:
+        """Only configured artifact roots may be read — a URI from the browser is not a key."""
+        if root is None:
+            return None
+        if not self._settings.artifact_root_allowed(root):
+            raise ValidationError(
+                "That artifact location is not configured for this platform.",
+                {"root": root, "allowed_roots": self._settings.artifact_roots},
+            )
+        return root
 
     def delete(self, experiment_id: str) -> None:
         """Soft delete: the record disappears from the UI, the artifacts stay auditable."""
@@ -147,26 +170,38 @@ class ExperimentService:
         self._repository.delete(experiment_id)
 
     # --- artifacts --------------------------------------------------------
-    def eda(self, experiment_id: str) -> EdaReport:
-        return self._artifact(experiment_id, lambda layout: layout.eda, EdaReport, "EDA")
+    # Every read accepts an artifact root, so the UI can open an experiment produced by
+    # another environment as easily as one of its own.
+    def eda(self, experiment_id: str, root: str | None = None) -> EdaReport:
+        return self._artifact(experiment_id, lambda layout: layout.eda, EdaReport, "EDA", root)
 
-    def leakage(self, experiment_id: str) -> LeakageReport:
+    def leakage(self, experiment_id: str, root: str | None = None) -> LeakageReport:
         return self._artifact(
-            experiment_id, lambda layout: layout.leakage, LeakageReport, "leakage analysis"
+            experiment_id, lambda layout: layout.leakage, LeakageReport, "leakage analysis", root
         )
 
-    def comparison(self, experiment_id: str) -> ComparisonReport:
+    def comparison(self, experiment_id: str, root: str | None = None) -> ComparisonReport:
         return self._artifact(
-            experiment_id, lambda layout: layout.comparison, ComparisonReport, "model comparison"
+            experiment_id,
+            lambda layout: layout.comparison,
+            ComparisonReport,
+            "model comparison",
+            root,
         )
 
-    def summary(self, experiment_id: str) -> ExperimentSummary:
+    def summary(self, experiment_id: str, root: str | None = None) -> ExperimentSummary:
         return self._artifact(
-            experiment_id, lambda layout: layout.summary, ExperimentSummary, "experiment summary"
+            experiment_id,
+            lambda layout: layout.summary,
+            ExperimentSummary,
+            "experiment summary",
+            root,
         )
 
-    def model_metadata(self, experiment_id: str, model_name: str) -> ModelMetadata:
-        layout = self._layout(experiment_id)
+    def model_metadata(
+        self, experiment_id: str, model_name: str, root: str | None = None
+    ) -> ModelMetadata:
+        layout = ExperimentLayout(base=self.get(experiment_id, root).artifact_prefix)
         metadata = read_model_if_exists(
             self._store, layout.model_metadata(model_name), ModelMetadata
         )
@@ -181,11 +216,11 @@ class ExperimentService:
         raise NotFoundError(f"No result exists for model '{model_name}' in this experiment.")
 
     # --- feature review ---------------------------------------------------
-    def feature_review(self, experiment_id: str) -> FeatureReviewResponse:
+    def feature_review(self, experiment_id: str, root: str | None = None) -> FeatureReviewResponse:
         """Join the EDA profile, the leakage verdict and any documentation into review rows."""
-        record = self._repository.get(experiment_id)
+        record = self.get(experiment_id, root)
         layout = ExperimentLayout(base=record.artifact_prefix)
-        eda = self.eda(experiment_id)
+        eda = self.eda(experiment_id, root)
         leakage = read_model_if_exists(self._store, layout.leakage, LeakageReport) or LeakageReport(
             experiment_id=experiment_id,
             generated_at=eda.generated_at,
@@ -290,10 +325,12 @@ class ExperimentService:
         return selection
 
     # --- training ---------------------------------------------------------
-    def training_config(self, experiment_id: str) -> TrainingConfigResponse:
+    def training_config(
+        self, experiment_id: str, root: str | None = None
+    ) -> TrainingConfigResponse:
         """Defaults the UI renders: resolved problem type, metrics and the model catalogue."""
-        record = self._repository.get(experiment_id)
-        eda = self.eda(experiment_id)
+        record = self.get(experiment_id, root)
+        eda = self.eda(experiment_id, root)
         problem_type = self._resolve_problem_type(record.requested_problem_type, eda)
         selection = self._stored_selection(record)
         return TrainingConfigResponse(
@@ -375,41 +412,26 @@ class ExperimentService:
             status=ExperimentStatus.READY_FOR_TRAINING,
             current_stage="training_requested",
             primary_metric=primary_metric,
-            model_statuses={spec.name: ModelRunStatus.QUEUED.value for spec in models},
-            failure_code=None,
-            failure_message=None,
+            requested_models=[spec.name for spec in models],
         )
         handle = self._orchestrator.start_training(updated)
         LOGGER.info("Started training for %s (%s)", experiment_id, handle.execution_id)
         return self._repository.update(experiment_id, training_execution_arn=handle.execution_id)
 
-    def training_status(self, experiment_id: str) -> TrainingStatusResponse:
-        """Per-model progress, read from the record and the artifacts. Never guessed."""
-        record = self._repository.get(experiment_id)
+    def training_status(
+        self, experiment_id: str, root: str | None = None
+    ) -> TrainingStatusResponse:
+        """Per-model progress, derived from the artifacts each training job writes.
+
+        The artifacts are the source of truth: a model that wrote metadata succeeded, one that
+        wrote a failure record failed. Nothing has to keep a per-model status field in sync.
+        """
+        record = self.get(experiment_id, root)
         layout = ExperimentLayout(base=record.artifact_prefix)
-        states: list[ModelRunState] = []
-        for name, raw_status in sorted(record.model_statuses.items()):
-            status = ModelRunStatus(raw_status)
-            metadata = (
-                read_model_if_exists(self._store, layout.model_metadata(name), ModelMetadata)
-                if status is ModelRunStatus.COMPLETED
-                else None
-            )
-            failure = (
-                read_model_if_exists(self._store, layout.model_failure(name), ModelFailure)
-                if status is ModelRunStatus.FAILED
-                else None
-            )
-            display_name = metadata.display_name if metadata else _display_name(name)
-            states.append(
-                ModelRunState(
-                    model_name=name,
-                    display_name=display_name,
-                    status=status,
-                    primary_score=metadata.primary_score if metadata else None,
-                    failure_message=failure.message if failure else None,
-                )
-            )
+        states = [
+            self._model_state(layout, name, record.status)
+            for name in sorted(record.requested_models)
+        ]
         return TrainingStatusResponse(
             experiment_id=experiment_id,
             status=record.status,
@@ -423,11 +445,39 @@ class ExperimentService:
         )
 
     # --- helpers ----------------------------------------------------------
+    def _model_state(
+        self, layout: ExperimentLayout, name: str, experiment_status: ExperimentStatus
+    ) -> ModelRunState:
+        metadata = read_model_if_exists(self._store, layout.model_metadata(name), ModelMetadata)
+        if metadata is not None:
+            return ModelRunState(
+                model_name=name,
+                display_name=metadata.display_name,
+                status=ModelRunStatus.COMPLETED,
+                primary_score=metadata.primary_score,
+            )
+        failure = read_model_if_exists(self._store, layout.model_failure(name), ModelFailure)
+        if failure is not None:
+            return ModelRunState(
+                model_name=name,
+                display_name=_display_name(name),
+                status=ModelRunStatus.FAILED,
+                failure_message=failure.message,
+            )
+        pending = (
+            ModelRunStatus.RUNNING
+            if experiment_status is ExperimentStatus.TRAINING
+            else ModelRunStatus.QUEUED
+        )
+        return ModelRunState(model_name=name, display_name=_display_name(name), status=pending)
+
     def _layout(self, experiment_id: str) -> ExperimentLayout:
         return ExperimentLayout(base=self._repository.get(experiment_id).artifact_prefix)
 
-    def _artifact(self, experiment_id: str, locator, model_type, label: str):
-        record = self._repository.get(experiment_id)
+    def _artifact(
+        self, experiment_id: str, locator, model_type, label: str, root: str | None = None
+    ):
+        record = self.get(experiment_id, root)
         layout = ExperimentLayout(base=record.artifact_prefix)
         artifact = read_model_if_exists(self._store, locator(layout), model_type)
         if artifact is None:
@@ -487,7 +537,7 @@ class ExperimentService:
                 parse_s3_uri(candidate)
             except InvalidS3UriError as error:
                 raise ValidationError(str(error)) from error
-        elif not self._settings.is_local:
+        else:
             raise ValidationError(
                 "The dataset URI must be an S3 URI of the form s3://bucket/key.",
                 {"dataset_uri": candidate},

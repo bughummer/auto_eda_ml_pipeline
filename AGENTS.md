@@ -21,8 +21,9 @@ frontend  → backend HTTP API only                     (never AWS)
 2. **No fitting on validation data.** Imputers, encoders, scalers and any learned transform fit
    on the training fold only. `ml_engine/preprocessing` is the only place that fits transforms.
 3. **The browser never calls AWS.** All AWS access goes through the FastAPI control plane.
-4. **The control plane does no heavy compute.** In `aws` mode FastAPI only validates, records,
-   starts executions and reads artifacts.
+4. **The control plane does no heavy compute.** FastAPI validates, records, starts executions
+   and reads artifacts. There is no local execution mode — do not add one; the test doubles in
+   `tests/support/` are how the platform is exercised without AWS.
 5. **Status comes from the backend.** The frontend renders `status`/`current_stage`; it never
    derives, guesses, or advances workflow state.
 6. **Nothing is auto-excluded except the target.** Deterministic checks recommend; the user
@@ -43,6 +44,9 @@ frontend  → backend HTTP API only                     (never AWS)
   types, the artifact readers and the tests in the same commit.
 * Artifact file names and S3 prefixes are defined once, in `ml_engine/io/layout.py`. Never
   hardcode a path string elsewhere.
+* Experiment records are S3 objects with one writer each. The control plane writes
+  `state/control.json`, the workflow writes `state/workflow.json`, and neither reads the other
+  to modify it. If you need a new mutable field, decide which document owns it.
 * Model plugins register themselves in `ml_engine/models/registry.py`. Orchestration code must
   never branch on a model name.
 * Tests: `tests/<package>/test_<module>.py`. New behaviour ships with a test. The end-to-end
@@ -66,6 +70,7 @@ changes — not the state machine, not the API, not the UI.
 
 ## Local development
 
-`ML_FACTORY_MODE=local` (default) uses `LocalObjectStore` + `LocalOrchestrator`: the real job
-entrypoints run in a background thread pool against a directory tree that mirrors the S3
-layout. Use it for everything except AWS integration work. `make demo` runs a full experiment.
+The suite substitutes two adapters: `tests/support/memory_store.py` (an object store addressed
+with real `s3://` URIs) and `tests/support/inline_orchestrator.py` (the real job entrypoints,
+run in-process in the same order). `build_container()` and `create_app()` take them as
+arguments — never add a second wiring path to the product to make something testable.

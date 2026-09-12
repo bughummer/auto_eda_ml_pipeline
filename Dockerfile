@@ -81,11 +81,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 # Serving the UI from the API is what makes this a single service.
 ENV ML_FACTORY_STATIC_DIR=/app/frontend/dist
-ENV ML_FACTORY_LOCAL_ROOT=/app/var/ml-factory
 
 # The control plane never needs root; it validates requests and calls AWS.
-RUN useradd --create-home --uid 1000 mlfactory && \
-    mkdir -p /app/var && chown -R mlfactory /app
+RUN useradd --create-home --uid 1000 mlfactory && chown -R mlfactory /app
 USER mlfactory
 
 EXPOSE 8520

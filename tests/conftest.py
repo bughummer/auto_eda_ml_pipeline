@@ -8,9 +8,12 @@ import pytest
 
 from backend.config import Settings
 from backend.container import AppContainer, build_container
+from backend.repositories import ObjectStoreExperimentRepository
 from ml_engine.contracts.common import ProblemType
-from ml_engine.io import ExperimentLayout, LocalObjectStore
+from ml_engine.io import ExperimentLayout
 from ml_engine.profiling import profile_dataset
+from tests.support.inline_orchestrator import InlineOrchestrator
+from tests.support.memory_store import InMemoryObjectStore
 
 
 @pytest.fixture(autouse=True)
@@ -21,31 +24,50 @@ def _isolated_secrets_file(tmp_path_factory, monkeypatch):
     )
 
 
-@pytest.fixture
-def artifact_root(tmp_path: Path) -> Path:
-    root = tmp_path / "artifacts"
-    root.mkdir()
-    return root
+ARTIFACT_BUCKET = "s3://ml-factory-test-artifacts"
+DATA_BUCKET = "s3://ml-factory-test-data"
 
 
 @pytest.fixture
-def store() -> LocalObjectStore:
-    return LocalObjectStore()
+def artifact_root() -> str:
+    return ARTIFACT_BUCKET
 
 
 @pytest.fixture
-def layout(artifact_root: Path) -> ExperimentLayout:
-    return ExperimentLayout.for_experiment(str(artifact_root), "exp-test")
+def store() -> InMemoryObjectStore:
+    """An object store addressed exactly as S3 is, so URI handling is under test too."""
+    return InMemoryObjectStore()
 
 
 @pytest.fixture
-def settings(artifact_root: Path) -> Settings:
-    return Settings(mode="local", local_root=artifact_root, local_max_workers=2)
+def layout(artifact_root: str) -> ExperimentLayout:
+    return ExperimentLayout.for_experiment(artifact_root, "exp-test")
 
 
 @pytest.fixture
-def container(settings: Settings) -> AppContainer:
-    built = build_container(settings)
+def settings(artifact_root: str) -> Settings:
+    """A fully configured platform whose artifact root is a temporary directory.
+
+    The artifact root is the only thing that differs from production: every other component,
+    including the repository, is the code that ships.
+    """
+    return Settings(
+        artifact_bucket=artifact_root,
+        allowed_dataset_prefixes=[DATA_BUCKET],
+        eda_state_machine_arn="arn:aws:states:eu-central-1:000000000000:stateMachine:test-eda",
+        training_state_machine_arn="arn:aws:states:eu-central-1:000000000000:stateMachine:test-train",
+    )
+
+
+@pytest.fixture
+def container(settings: Settings, store: InMemoryObjectStore) -> AppContainer:
+    """The real container, with the storage and orchestration adapters substituted."""
+    built = build_container(
+        settings,
+        store=store,
+        repository=ObjectStoreExperimentRepository(store, settings.artifact_root),
+        orchestrator=InlineOrchestrator(store),
+    )
     yield built
     built.shutdown()
 
@@ -115,17 +137,22 @@ def classification_eda(classification_frame: pd.DataFrame):
 
 
 @pytest.fixture
-def dataset_csv(tmp_path: Path, classification_frame: pd.DataFrame) -> Path:
+def dataset_csv(
+    tmp_path: Path, store: InMemoryObjectStore, classification_frame: pd.DataFrame
+) -> str:
+    """The classification dataset, uploaded to the approved data bucket."""
     path = tmp_path / "churn.csv"
     classification_frame.to_csv(path, index=False)
-    return path
+    return store.put_file(f"{DATA_BUCKET}/curated/churn.csv", path)
 
 
 @pytest.fixture
-def regression_csv(tmp_path: Path, regression_frame: pd.DataFrame) -> Path:
+def regression_csv(
+    tmp_path: Path, store: InMemoryObjectStore, regression_frame: pd.DataFrame
+) -> str:
     path = tmp_path / "prices.csv"
     regression_frame.to_csv(path, index=False)
-    return path
+    return store.put_file(f"{DATA_BUCKET}/curated/prices.csv", path)
 
 
 @pytest.fixture

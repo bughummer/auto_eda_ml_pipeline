@@ -17,7 +17,6 @@ by accident.
 import importlib.util
 import logging
 import os
-from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -113,11 +112,6 @@ def _load_python_settings(path: Path) -> dict[str, Any]:
     }
 
 
-class DeploymentMode(StrEnum):
-    LOCAL = "local"
-    AWS = "aws"
-
-
 class Settings(BaseSettings):
     """Configuration for the FastAPI control plane."""
 
@@ -125,7 +119,6 @@ class Settings(BaseSettings):
         env_prefix="ML_FACTORY_", env_file=".env", extra="ignore", case_sensitive=False
     )
 
-    mode: DeploymentMode = DeploymentMode.LOCAL
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
@@ -137,10 +130,6 @@ class Settings(BaseSettings):
         ),
     )
 
-    # --- local mode -------------------------------------------------------
-    local_root: Path = Path("./var/ml-factory")
-    local_max_workers: int = Field(default=2, ge=1, le=16)
-
     # --- aws credentials --------------------------------------------------
     # Leave these empty to use the standard AWS chain (instance role, task role or
     # ~/.aws), which is the preferred option: nothing to rotate and nothing to leak.
@@ -150,13 +139,19 @@ class Settings(BaseSettings):
     aws_session_token: SecretStr | None = None
     aws_profile: str | None = None
 
-    # --- aws mode ---------------------------------------------------------
+    # --- aws resources ----------------------------------------------------
     aws_region: str = "eu-central-1"
     artifact_bucket: str = ""
     allowed_dataset_prefixes: list[str] = Field(default_factory=list)
+    additional_artifact_roots: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra artifact buckets the UI may browse read-only, for experiments produced by "
+            "another environment. New experiments are always written to artifact_bucket."
+        ),
+    )
     eda_state_machine_arn: str = ""
     training_state_machine_arn: str = ""
-    experiments_table: str = "ml-factory-experiments"
     kms_key_id: str = ""
 
     # --- bedrock ----------------------------------------------------------
@@ -205,48 +200,47 @@ class Settings(BaseSettings):
         return "default AWS chain (instance role, task role or ~/.aws)"
 
     @property
-    def is_local(self) -> bool:
-        return self.mode is DeploymentMode.LOCAL
+    def artifact_root(self) -> str:
+        """Where new experiments are written."""
+        return self.artifact_bucket
 
     @property
-    def artifact_root(self) -> str:
-        """Where experiment artifacts live, in whichever mode is active."""
-        if self.is_local:
-            return str(self.local_root.expanduser().resolve())
-        return self.artifact_bucket
+    def artifact_roots(self) -> list[str]:
+        """Every artifact root the platform may read, the writable one first."""
+        roots = [self.artifact_bucket] if self.artifact_bucket else []
+        roots.extend(root for root in self.additional_artifact_roots if root not in roots)
+        return roots
+
+    def artifact_root_allowed(self, root: str) -> bool:
+        """Guards the artifact browser: only configured roots may be read."""
+        candidate = root.rstrip("/")
+        return any(candidate == configured.rstrip("/") for configured in self.artifact_roots)
 
     def dataset_uri_allowed(self, uri: str) -> bool:
         """Allow-list check performed before any AWS call is made.
 
-        In local mode any readable path is allowed; in AWS mode the URI must sit under a
-        configured approved prefix. An empty allow-list denies everything, deliberately.
+        An empty allow-list denies everything, deliberately.
         """
-        if self.is_local:
-            return True
         return any(uri_matches_prefix(uri, prefix) for prefix in self.allowed_dataset_prefixes)
 
-    def validate_for_mode(self) -> list[str]:
-        """Configuration problems that would make this mode unusable at runtime."""
+    def validate_configuration(self) -> list[str]:
+        """Configuration problems that would make the platform unusable at runtime."""
         problems: list[str] = []
-        # A half-configured key pair is a problem in any mode, so check it before the
-        # local-mode shortcut.
         if bool(self.aws_access_key_id) != bool(self.aws_secret_access_key):
             problems.append(
                 "ML_FACTORY_AWS_ACCESS_KEY_ID and ML_FACTORY_AWS_SECRET_ACCESS_KEY must be set "
                 "together, or both left empty to use the instance role"
             )
-        if self.is_local:
-            return problems
         if not self.artifact_bucket.startswith("s3://"):
-            problems.append("ML_FACTORY_ARTIFACT_BUCKET must be an s3:// URI in aws mode")
+            problems.append("ML_FACTORY_ARTIFACT_BUCKET must be an s3:// URI")
         if not self.allowed_dataset_prefixes:
             problems.append(
                 "ML_FACTORY_ALLOWED_DATASET_PREFIXES is empty; every dataset would be rejected"
             )
         if not self.eda_state_machine_arn:
-            problems.append("ML_FACTORY_EDA_STATE_MACHINE_ARN is required in aws mode")
+            problems.append("ML_FACTORY_EDA_STATE_MACHINE_ARN is required")
         if not self.training_state_machine_arn:
-            problems.append("ML_FACTORY_TRAINING_STATE_MACHINE_ARN is required in aws mode")
+            problems.append("ML_FACTORY_TRAINING_STATE_MACHINE_ARN is required")
         if self.bedrock_enabled and not self.bedrock_model_id:
             problems.append("ML_FACTORY_BEDROCK_MODEL_ID is required when Bedrock is enabled")
         return problems

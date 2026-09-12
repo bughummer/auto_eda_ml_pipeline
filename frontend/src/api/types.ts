@@ -92,7 +92,7 @@ export interface ExperimentRecord {
   primary_metric: string | null;
   failure_code: string | null;
   failure_message: string | null;
-  model_statuses: Record<string, ModelRunStatus>;
+  requested_models: string[];
 }
 
 export interface NumericStats {
@@ -401,13 +401,20 @@ export interface ReasoningReport {
 
 export interface HealthResponse {
   status: string;
-  mode: string;
   orchestrator: string;
   artifact_root: string;
+  artifact_roots: string[];
   credential_source: string;
   bedrock_enabled: boolean;
   configuration_problems: string[];
   available_models: string[];
+}
+
+export interface ExperimentListResponse {
+  experiments: ExperimentRecord[];
+  count: number;
+  root: string;
+  available_roots: string[];
 }
 
 export interface ApiErrorBody {

@@ -57,6 +57,17 @@ class S3ObjectStore:
                 uris.append(f"s3://{parsed.bucket}/{item['Key']}")
         return sorted(uris)
 
+    def list_prefixes(self, prefix: str) -> list[str]:
+        """Common prefixes one level down, so listing experiments costs one call per page
+        instead of one per object."""
+        parsed = parse_s3_uri(prefix if prefix.endswith("/") else prefix + "/")
+        paginator = self._client.get_paginator("list_objects_v2")
+        prefixes: list[str] = []
+        for page in paginator.paginate(Bucket=parsed.bucket, Prefix=parsed.key, Delimiter="/"):
+            for item in page.get("CommonPrefixes", []):
+                prefixes.append(f"s3://{parsed.bucket}/{item['Prefix']}")
+        return sorted(prefixes)
+
     def stat(self, uri: str) -> ObjectMetadata | None:
         parsed = parse_s3_uri(uri)
         try:

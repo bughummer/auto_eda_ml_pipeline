@@ -1,4 +1,8 @@
 # ML Factory - single service: FastAPI serves the API and the built React UI.
+#
+# This is the only thing that runs outside AWS. Datasets, artifacts, experiment records and
+# every ML workload live in S3 / SageMaker / Step Functions.
+#
 # Run: docker compose up -d --build   (then open http://<host>:7570)
 
 services:
@@ -20,25 +24,18 @@ services:
       # Loopback and internal hosts must bypass the proxy.
       no_proxy: ${no_proxy:-localhost,127.0.0.1}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
-      # local: filesystem + in-process runner. aws: S3 + Step Functions + DynamoDB.
-      ML_FACTORY_MODE: ${ML_FACTORY_MODE:-local}
       ML_FACTORY_LOG_LEVEL: ${ML_FACTORY_LOG_LEVEL:-INFO}
+      # Everything else - the artifact bucket, the state machines, the dataset allow-list and
+      # the credentials - comes from config/secrets/config.py, mounted below.
       ML_FACTORY_AWS_REGION: ${ML_FACTORY_AWS_REGION:-eu-central-1}
-      # local mode only: datasets are read from inside the container, so the UI takes
-      # /data/<file>. In aws mode this is unused - datasets are read from S3 by the jobs.
-      ML_FACTORY_LOCAL_DATA_HINT: /data
     volumes:
       # The platform's configuration, exactly as .env.example documents it.
       - ./.env:/app/.env:ro
       # Credentials. The directory is mounted, so it works before config.py exists;
       # config/secrets/config.py is gitignored and read-only in the container.
       - ./config/secrets:/app/config/secrets:ro
-      # Local-mode datasets. Point ML_FACTORY_DATA_DIR at wherever the CSV/Parquet files
-      # live on the host; the container reads them read-only as /data/<file>.
-      - ${ML_FACTORY_DATA_DIR:-./var/sample-data}:/data:ro
-      # Local-mode artifacts survive a restart; unused in aws mode.
-      - ml_factory_artifacts:/app/var
-      # AWS mode: uncomment to pass the server's credentials to the control plane.
+      # Uncomment to use the server's shared AWS credentials instead of an instance role
+      # or the keys in config/secrets/config.py.
       # - ${HOME}/.aws:/home/mlfactory/.aws:ro
     networks:
       - dev_network
@@ -47,6 +44,3 @@ services:
 networks:
   dev_network:
     external: true
-
-volumes:
-  ml_factory_artifacts:

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import dictionary, experiments, health, models, reasoning
 from backend.config import Settings, get_settings
-from backend.container import build_container
+from backend.container import AppContainer, build_container
 from backend.errors import register_error_handlers
 
 LOGGER = logging.getLogger("ml_factory.api")
@@ -37,18 +37,27 @@ def configure_logging(level: str) -> None:
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, *, container: AppContainer | None = None
+) -> FastAPI:
+    """Build the application.
+
+    ``container`` lets a caller supply an already-wired graph; when it does, the caller owns
+    its lifetime. Without one the app builds its own from the settings.
+    """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.container = build_container(settings)
-        LOGGER.info("ML Factory API ready (mode=%s)", settings.mode.value)
+        owned = container is None
+        app.state.container = container or build_container(settings)
+        LOGGER.info("ML Factory API ready (artifacts %s)", settings.artifact_root)
         try:
             yield
         finally:
-            app.state.container.shutdown()
+            if owned:
+                app.state.container.shutdown()
 
     app = FastAPI(
         title="ML Factory",

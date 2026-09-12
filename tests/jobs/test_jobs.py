@@ -36,7 +36,7 @@ def _config(dataset_csv, layout, models: list[str]) -> ExperimentConfig:
         experiment_id="exp-test",
         name="test",
         created_at=datetime.now(UTC),
-        dataset=DatasetReference(uri=str(dataset_csv), file_format="csv"),
+        dataset=DatasetReference(uri=dataset_csv, file_format="csv"),
         target_column="churned",
         problem_type=ProblemType.BINARY_CLASSIFICATION,
         requested_problem_type=RequestedProblemType.AUTO,
@@ -62,7 +62,7 @@ def test_profiling_job_writes_both_artifacts(store, layout, dataset_csv):
         store,
         layout,
         experiment_id="exp-test",
-        dataset_uri=str(dataset_csv),
+        dataset_uri=dataset_csv,
         target_column="churned",
     )
     assert store.exists(layout.eda) and store.exists(layout.leakage)
@@ -71,8 +71,11 @@ def test_profiling_job_writes_both_artifacts(store, layout, dataset_csv):
     assert read_model(store, layout.eda, EdaReport).experiment_id == "exp-test"
 
 
-def test_profiling_cli_reports_a_missing_target_as_an_artifact(tmp_path, store, dataset_csv):
-    base = str(tmp_path / "exp-missing")
+def test_profiling_cli_reports_a_missing_target_as_an_artifact(store, dataset_csv, monkeypatch):
+    from ml_engine.io import ExperimentLayout
+
+    monkeypatch.setattr("jobs._common.runtime.build_store", lambda *_args, **_kwargs: store)
+    base = ExperimentLayout.for_experiment("s3://ml-factory-test-artifacts", "exp-missing").base
     code = profiling_main(
         [
             "--experiment-id",
@@ -96,7 +99,7 @@ def test_preparation_job_splits_and_fits(store, layout, dataset_csv):
         store,
         layout,
         experiment_id="exp-test",
-        dataset_uri=str(dataset_csv),
+        dataset_uri=dataset_csv,
         target_column="churned",
     )
     write_model(
@@ -116,7 +119,7 @@ def test_preparation_fits_a_pipeline_per_required_strategy(store, layout, datase
         store,
         layout,
         experiment_id="exp-test",
-        dataset_uri=str(dataset_csv),
+        dataset_uri=dataset_csv,
         target_column="churned",
     )
     config = _config(dataset_csv, layout, ["logistic_regression", "catboost"])
@@ -128,12 +131,13 @@ def test_preparation_fits_a_pipeline_per_required_strategy(store, layout, datase
     assert store.exists(layout.preprocessor("native_categorical"))
 
 
-def test_preparation_refuses_an_unusable_selection(store, layout, dataset_csv):
+def test_preparation_refuses_an_unusable_selection(store, layout, dataset_csv, monkeypatch):
+    monkeypatch.setattr("jobs._common.runtime.build_store", lambda *_args, **_kwargs: store)
     run_profiling(
         store,
         layout,
         experiment_id="exp-test",
-        dataset_uri=str(dataset_csv),
+        dataset_uri=dataset_csv,
         target_column="churned",
     )
     config = _config(dataset_csv, layout, ["logistic_regression"])
@@ -158,7 +162,8 @@ def test_training_job_writes_model_and_metadata(store, layout, dataset_csv):
     assert stored.preprocessing is not None
 
 
-def test_training_job_reports_an_unconfigured_model(store, layout, dataset_csv):
+def test_training_job_reports_an_unconfigured_model(store, layout, dataset_csv, monkeypatch):
+    monkeypatch.setattr("jobs._common.runtime.build_store", lambda *_args, **_kwargs: store)
     _prepare(store, layout, dataset_csv, ["logistic_regression"])
     code = training_main(
         ["--experiment-id", "exp-test", "--artifact-base", layout.base, "--model-name", "xgboost"]
@@ -210,11 +215,12 @@ def test_a_model_that_produced_nothing_is_still_represented(store, layout, datas
 def test_preparation_drops_rows_without_a_target(store, layout, tmp_path, classification_frame):
     frame = classification_frame.copy()
     frame.loc[frame.index[:20], "churned"] = pd.NA
-    path = tmp_path / "with_missing_target.csv"
-    frame.to_csv(path, index=False)
+    local = tmp_path / "with_missing_target.csv"
+    frame.to_csv(local, index=False)
+    path = store.put_file("s3://ml-factory-test-data/curated/with_missing_target.csv", local)
 
     run_profiling(
-        store, layout, experiment_id="exp-test", dataset_uri=str(path), target_column="churned"
+        store, layout, experiment_id="exp-test", dataset_uri=path, target_column="churned"
     )
     write_model(store, layout.experiment_config, _config(path, layout, ["logistic_regression"]))
     report = run_preparation(store, layout, experiment_id="exp-test")
@@ -227,7 +233,7 @@ def _prepare(store, layout, dataset_csv, models: list[str]) -> PreparationReport
         store,
         layout,
         experiment_id="exp-test",
-        dataset_uri=str(dataset_csv),
+        dataset_uri=dataset_csv,
         target_column="churned",
     )
     write_model(store, layout.experiment_config, _config(dataset_csv, layout, models))
@@ -239,37 +245,31 @@ def _quiet_logs(caplog):
     caplog.set_level("WARNING")
 
 
-def test_evaluation_records_the_terminal_state_when_a_table_is_configured(
-    store, layout, dataset_csv
-):
+def test_evaluation_writes_the_terminal_state_beside_the_artifacts(store, layout, dataset_csv):
     """The evaluation job owns the terminal status because it is what computes it."""
-    from jobs._common.experiment_state import DynamoExperimentStateWriter
+    from jobs._common.experiment_state import build_state_writer
+    from ml_engine.contracts.experiment import WorkflowState
+    from ml_engine.io import read_model
 
-    class FakeTable:
-        def __init__(self):
-            self.calls = []
-
-        def update_item(self, **kwargs):
-            self.calls.append(kwargs)
-
-    table = FakeTable()
     _prepare(store, layout, dataset_csv, ["logistic_regression"])
     run_training(store, layout, experiment_id="exp-test", model_name="logistic_regression")
     run_evaluation(
         store,
         layout,
         experiment_id="exp-test",
-        state_writer=DynamoExperimentStateWriter("table", "eu-central-1", table=table),
+        state_writer=build_state_writer(store, layout),
     )
-    values = table.calls[0]["ExpressionAttributeValues"]
-    assert values[":status"] in {"COMPLETED", "COMPLETED_WITH_WARNINGS"}
-    assert values[":best_model"] == "logistic_regression"
+    state = read_model(store, layout.workflow_state, WorkflowState)
+    assert state.status.value in {"COMPLETED", "COMPLETED_WITH_WARNINGS"}
+    assert state.best_model == "logistic_regression"
+    assert state.best_score is not None
 
 
-def test_evaluation_skips_the_state_update_without_a_table(store, layout, dataset_csv):
+def test_evaluation_can_skip_the_state_write(store, layout, dataset_csv):
     from jobs._common.experiment_state import build_state_writer
 
-    assert build_state_writer(None, "eu-central-1") is None
+    assert build_state_writer(store, layout, enabled=False) is None
     _prepare(store, layout, dataset_csv, ["logistic_regression"])
     run_training(store, layout, experiment_id="exp-test", model_name="logistic_regression")
     assert run_evaluation(store, layout, experiment_id="exp-test").best_model is not None
+    assert not store.exists(layout.workflow_state)

@@ -87,47 +87,53 @@ def test_preprocessor_paths_are_strategy_specific():
     assert layout.preprocessor("dense_numeric") != layout.preprocessor("native_categorical")
 
 
-def test_local_store_round_trips_bytes(tmp_path, store):
+@pytest.fixture
+def local_store() -> LocalObjectStore:
+    """The filesystem adapter, used for SageMaker-mounted paths and these tests."""
+    return LocalObjectStore()
+
+
+def test_local_store_round_trips_bytes(tmp_path, local_store):
     uri = str(tmp_path / "nested" / "file.bin")
-    store.write_bytes(uri, b"payload")
-    assert store.read_bytes(uri) == b"payload"
-    assert store.exists(uri)
-    assert store.stat(uri).size_bytes == 7
+    local_store.write_bytes(uri, b"payload")
+    assert local_store.read_bytes(uri) == b"payload"
+    assert local_store.exists(uri)
+    assert local_store.stat(uri).size_bytes == 7
 
 
-def test_missing_object_raises(tmp_path, store):
+def test_missing_object_raises(tmp_path, local_store):
     with pytest.raises(ObjectNotFoundError):
-        store.read_bytes(str(tmp_path / "absent.json"))
-    assert store.stat(str(tmp_path / "absent.json")) is None
+        local_store.read_bytes(str(tmp_path / "absent.json"))
+    assert local_store.stat(str(tmp_path / "absent.json")) is None
 
 
-def test_contracts_round_trip_through_the_store(tmp_path, store, classification_eda):
+def test_contracts_round_trip_through_the_store(tmp_path, local_store, classification_eda):
     uri = str(tmp_path / "eda.json")
-    write_model(store, uri, classification_eda)
-    restored = read_model(store, uri, EdaReport)
+    write_model(local_store, uri, classification_eda)
+    restored = read_model(local_store, uri, EdaReport)
     assert restored.dataset == classification_eda.dataset
     assert len(restored.columns) == len(classification_eda.columns)
-    assert read_model_if_exists(store, str(tmp_path / "nope.json"), EdaReport) is None
+    assert read_model_if_exists(local_store, str(tmp_path / "nope.json"), EdaReport) is None
 
 
-def test_csv_and_parquet_load_identically(tmp_path, store, classification_frame):
+def test_csv_and_parquet_load_identically(tmp_path, local_store, classification_frame):
     csv_path = tmp_path / "data.csv"
     classification_frame.to_csv(csv_path, index=False)
     parquet_uri = str(tmp_path / "data.parquet")
-    write_parquet(store, parquet_uri, classification_frame)
+    write_parquet(local_store, parquet_uri, classification_frame)
 
-    from_csv = load_dataset(store, str(csv_path))
-    from_parquet = load_dataset(store, parquet_uri)
+    from_csv = load_dataset(local_store, str(csv_path))
+    from_parquet = load_dataset(local_store, parquet_uri)
     assert from_csv.frame.shape == from_parquet.frame.shape
     assert list(from_csv.frame.columns) == list(from_parquet.frame.columns)
     assert from_csv.file_format == "csv"
     assert from_parquet.file_format == "parquet"
 
 
-def test_sampling_is_flagged(tmp_path, store, classification_frame):
+def test_sampling_is_flagged(tmp_path, local_store, classification_frame):
     path = tmp_path / "data.csv"
     classification_frame.to_csv(path, index=False)
-    loaded = load_dataset(store, str(path), max_rows=50)
+    loaded = load_dataset(local_store, str(path), max_rows=50)
     assert len(loaded.frame) == 50
     assert loaded.sampled is True
 

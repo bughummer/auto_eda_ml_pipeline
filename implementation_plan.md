@@ -21,7 +21,8 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 - [x] Model plugin architecture (§9)
 - [x] EDA output schema (`ml_engine/contracts/eda.py`)
 - [x] Error-handling strategy (§10) + `backend/errors.py`
-- [x] Local development strategy (§13): `ObjectStore` / `ExperimentOrchestrator` protocols
+- [x] Development strategy (§13): `ObjectStore` / `ExperimentOrchestrator` protocols, with the
+      substitutes living in the test suite rather than in the product
 
 ## Phase B — EDA vertical slice ✅
 
@@ -32,7 +33,7 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 - [x] `POST /api/v1/experiments`: validate → allow-list check → create record → start
       workflow → return `{experiment_id, status}` without blocking
 - [x] `GET /experiments/{id}`, `/eda` served from artifacts
-- [x] Local orchestrator so the slice runs without AWS
+- [x] In-process orchestrator test double so the slice is testable without AWS
 - [x] Frontend: create experiment, experiment list, EDA view with TanStack Query polling
 
 ## Phase C — deterministic ML engine ✅
@@ -100,8 +101,12 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 
 ## Phase K — application state ✅
 
-- [x] DynamoDB experiment record (metadata/state only) with an in-memory implementation for
-      local development and tests
+- [x] Experiment records stored in the artifact bucket as three single-writer JSON objects
+      (`experiment.json`, `state/control.json`, `state/workflow.json`); no state database
+- [x] Step Functions writes its stage transitions with the `s3:putObject` SDK integration
+- [x] Per-model progress derived from the model artifacts rather than stored
+- [x] Read-only browsing of any configured artifact bucket, so previous experiments from
+      another environment are visible in the UI
 
 ## Phase L — data dictionary ✅
 
@@ -126,7 +131,8 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 | SHAP | infrastructure cost and runtime variance; native importance covers v1 needs |
 | SMOTE / resampling | class weighting first; resampling changes evaluation semantics |
 | NLP vectorization | text columns are detected, warned about and excluded |
-| Visual S3 browsing | validated URI entry + allow-list is sufficient and safer |
+| Visual S3 dataset browsing | validated URI entry + allow-list is sufficient and safer (artifact *buckets* are selectable, individual objects are not) |
+| A local execution mode | one runtime to reason about; the test doubles cover development (AD-12) |
 | Automated model deployment / endpoints | out of scope by mandate |
 | Autonomous experiment execution by the LLM | v1 proposes; a human starts the next experiment |
 
@@ -135,9 +141,9 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 ```
 make install      # python venv + npm install
 make lint         # ruff: clean
-make test         # pytest: 335 tests, all green
+make test         # pytest: 350 tests, all green
 make build-front  # tsc --noEmit + vite build: clean
-make demo         # a complete local experiment, end to end, without AWS
+make deploy-aws   # job image -> ECR, workflows -> S3, stack -> CloudFormation
 ```
 
 The suite covers the deterministic engine unit by unit, the job entrypoints (including the

@@ -1,4 +1,7 @@
-"""Generate a realistic sample dataset for local development and the demo.
+"""Generate a realistic sample dataset to upload to an approved S3 prefix.
+
+    python scripts/sample_data.py
+    aws s3 cp var/sample-data/ s3://my-approved-data/curated/ --recursive
 
 Deliberately contains the problems the platform is supposed to catch: an identifier, a
 constant column, a high-missingness column, a leaked copy of the target, a post-outcome

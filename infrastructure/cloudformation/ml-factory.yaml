@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  ML Factory - artifact storage, experiment records, IAM boundaries and the two Step Functions
-  workflows. Deliberately contains no always-on compute: every ML workload is an ephemeral
+  ML Factory - artifact storage, IAM boundaries and the two Step Functions workflows.
+  Experiment records live in the artifact bucket with everything else, so there is no state
+  database. Deliberately contains no always-on compute: every ML workload is an ephemeral
   SageMaker job started by a workflow.
 
 Parameters:
@@ -80,24 +81,6 @@ Resources:
               KMSMasterKeyID: !Ref ArtifactKey
             BucketKeyEnabled: true
 
-  ExperimentsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: ml-factory-experiments
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - { AttributeName: experiment_id, AttributeType: S }
-      KeySchema:
-        - { AttributeName: experiment_id, KeyType: HASH }
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: !Ref ArtifactKey
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-
   JobRole:
     Type: AWS::IAM::Role
     Properties:
@@ -128,9 +111,6 @@ Resources:
               - Effect: Allow
                 Action: ['s3:ListBucket']
                 Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}'
-              - Effect: Allow
-                Action: ['dynamodb:UpdateItem']
-                Resource: !GetAtt ExperimentsTable.Arn
               - Effect: Allow
                 Action: ['kms:Decrypt', 'kms:GenerateDataKey']
                 Resource: !GetAtt ArtifactKey.Arn
@@ -186,9 +166,13 @@ Resources:
                 Resource: !GetAtt JobRole.Arn
                 Condition:
                   StringEquals: { 'iam:PassedToService': sagemaker.amazonaws.com }
+              # Stage transitions are written as state/workflow.json beside the artifacts.
               - Effect: Allow
-                Action: ['dynamodb:UpdateItem']
-                Resource: !GetAtt ExperimentsTable.Arn
+                Action: ['s3:PutObject']
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/ml-factory/experiments/*/state/*'
+              - Effect: Allow
+                Action: ['kms:Decrypt', 'kms:GenerateDataKey']
+                Resource: !GetAtt ArtifactKey.Arn
 
   BackendRole:
     Type: AWS::IAM::Role
@@ -214,14 +198,6 @@ Resources:
                   - !Ref EdaStateMachine
                   - !Ref TrainingStateMachine
                   - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:ml-factory-*:*'
-              - Effect: Allow
-                Action:
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:UpdateItem'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:Scan'
-                Resource: !GetAtt ExperimentsTable.Arn
               - Effect: Allow
                 Action: ['s3:GetObject', 's3:PutObject']
                 Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/ml-factory/experiments/*'
@@ -296,9 +272,6 @@ Outputs:
   ArtifactBucketUri:
     Description: Value for ML_FACTORY_ARTIFACT_BUCKET
     Value: !Sub 's3://${ArtifactBucketName}'
-  ExperimentsTableName:
-    Description: Value for ML_FACTORY_EXPERIMENTS_TABLE
-    Value: !Ref ExperimentsTable
   EdaStateMachineArn:
     Description: Value for ML_FACTORY_EDA_STATE_MACHINE_ARN
     Value: !Ref EdaStateMachine

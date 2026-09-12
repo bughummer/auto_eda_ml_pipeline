@@ -1,13 +1,8 @@
-"""Experiment record persistence."""
+"""Experiment record persistence, backed by the artifact store."""
 
 from backend.repositories.experiments import (
-    DynamoExperimentRepository,
     ExperimentRepository,
-    InMemoryExperimentRepository,
+    ObjectStoreExperimentRepository,
 )
 
-__all__ = [
-    "DynamoExperimentRepository",
-    "ExperimentRepository",
-    "InMemoryExperimentRepository",
-]
+__all__ = ["ExperimentRepository", "ObjectStoreExperimentRepository"]

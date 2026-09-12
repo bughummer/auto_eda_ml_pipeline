@@ -1,27 +1,20 @@
 """Dependency wiring.
 
-One place decides which adapters are in play. Swapping local for AWS changes this file's
-output, nothing else.
+One place decides which adapters are in play: S3 for artifacts and experiment records, Step
+Functions for orchestration, Bedrock for the optional reasoning layer. Everything heavier
+than a validation runs in AWS.
 """
 
 import logging
 from dataclasses import dataclass
 
 from backend.config import Settings, get_settings
-from backend.orchestration import (
-    ExperimentOrchestrator,
-    LocalOrchestrator,
-    StepFunctionsOrchestrator,
-)
-from backend.repositories import (
-    DynamoExperimentRepository,
-    ExperimentRepository,
-    InMemoryExperimentRepository,
-)
+from backend.orchestration import ExperimentOrchestrator, StepFunctionsOrchestrator
+from backend.repositories import ExperimentRepository, ObjectStoreExperimentRepository
 from backend.services.dictionary import DataDictionaryService
 from backend.services.experiments import ExperimentService
 from backend.services.reasoning import ReasoningService
-from ml_engine.io import LocalObjectStore, ObjectStore, S3ObjectStore
+from ml_engine.io import ObjectStore, S3ObjectStore
 
 LOGGER = logging.getLogger("ml_factory.container")
 
@@ -42,35 +35,37 @@ class AppContainer:
             shutdown()
 
 
-def build_container(settings: Settings | None = None) -> AppContainer:
+def build_container(
+    settings: Settings | None = None,
+    *,
+    store: ObjectStore | None = None,
+    repository: ExperimentRepository | None = None,
+    orchestrator: ExperimentOrchestrator | None = None,
+) -> AppContainer:
+    """Build the application graph.
+
+    The adapters are injectable so tests can substitute doubles without a second wiring path
+    existing in the product.
+    """
     settings = settings or get_settings()
-    problems = settings.validate_for_mode()
-    if problems:
-        for problem in problems:
-            LOGGER.error("Configuration problem: %s", problem)
+    for problem in settings.validate_configuration():
+        LOGGER.error("Configuration problem: %s", problem)
 
-    if settings.is_local:
-        settings.local_root.mkdir(parents=True, exist_ok=True)
-        store: ObjectStore = LocalObjectStore()
-        repository: ExperimentRepository = InMemoryExperimentRepository()
-        orchestrator: ExperimentOrchestrator = LocalOrchestrator(
-            repository, store, max_workers=settings.local_max_workers
-        )
-    else:
-        from backend.aws import build_client, build_dynamodb_table
+    if store is None or repository is None or orchestrator is None:
+        from backend.aws import build_client
 
+    if store is None:
         store = S3ObjectStore(build_client("s3", settings))
-        repository = DynamoExperimentRepository(
-            build_dynamodb_table(settings.experiments_table, settings)
-        )
+    if repository is None:
+        repository = ObjectStoreExperimentRepository(store, settings.artifact_root)
+    if orchestrator is None:
         orchestrator = StepFunctionsOrchestrator(
             build_client("stepfunctions", settings),
             eda_state_machine_arn=settings.eda_state_machine_arn,
             training_state_machine_arn=settings.training_state_machine_arn,
-            experiments_table=settings.experiments_table,
         )
 
-    service = ExperimentService(
+    experiments = ExperimentService(
         settings=settings, repository=repository, store=store, orchestrator=orchestrator
     )
     dictionary = DataDictionaryService(settings=settings, repository=repository, store=store)
@@ -80,13 +75,13 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         store=store,
         client=_build_reasoning_client(settings),
     )
-    LOGGER.info("ML Factory container built in %s mode", settings.mode.value)
+    LOGGER.info("ML Factory container built (artifact root %s)", settings.artifact_root)
     return AppContainer(
         settings=settings,
         store=store,
         repository=repository,
         orchestrator=orchestrator,
-        experiments=service,
+        experiments=experiments,
         dictionary=dictionary,
         reasoning=reasoning,
     )

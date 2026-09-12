@@ -1,7 +1,8 @@
 """The full vertical slice: create -> EDA -> feature review -> training -> comparison.
 
-This is the test that must never go red: it exercises the real job code, the real contracts
-and the real artifact layout, with only the storage and compute adapters swapped.
+This is the test that must never go red. It exercises the real job code, the real contracts,
+the real S3-addressed artifact layout and the real experiment records; only the bytes and the
+compute are substituted (an in-memory store and an in-process orchestrator).
 """
 
 import pytest
@@ -28,7 +29,7 @@ USER = "analyst@corp.example"
 def _run_to_feature_review(container, dataset_csv, target="churned", name="e2e"):
     service = container.experiments
     record = service.create(
-        CreateExperimentRequest(name=name, dataset_uri=str(dataset_csv), target_column=target),
+        CreateExperimentRequest(name=name, dataset_uri=dataset_csv, target_column=target),
         USER,
     )
     container.orchestrator.wait_for_idle(timeout=300)
@@ -87,7 +88,7 @@ def test_full_classification_experiment(container, dataset_csv):
 
     summary = service.summary(record.experiment_id)
     assert summary.config.feature_selection.selected_features == keep
-    assert summary.config.dataset.uri == str(dataset_csv)
+    assert summary.config.dataset.uri == dataset_csv
     assert summary.comparison.best_model == comparison.best_model
 
 
@@ -115,9 +116,7 @@ def test_leakage_left_in_place_produces_a_suspiciously_perfect_model(container, 
 def test_regression_experiment(container, regression_csv):
     service = container.experiments
     record = service.create(
-        CreateExperimentRequest(
-            name="prices", dataset_uri=str(regression_csv), target_column="price"
-        ),
+        CreateExperimentRequest(name="prices", dataset_uri=regression_csv, target_column="price"),
         USER,
     )
     container.orchestrator.wait_for_idle(timeout=300)
@@ -212,12 +211,13 @@ def test_failed_model_does_not_fail_the_experiment(container, dataset_csv, monke
 def test_a_dataset_without_a_usable_target_fails_cleanly(container, tmp_path):
     import pandas as pd
 
-    path = tmp_path / "constant_target.csv"
-    pd.DataFrame({"x": range(50), "y": [1] * 50}).to_csv(path, index=False)
+    local = tmp_path / "constant_target.csv"
+    pd.DataFrame({"x": range(50), "y": [1] * 50}).to_csv(local, index=False)
+    uri = container.store.put_file("s3://ml-factory-test-data/curated/constant_target.csv", local)
 
     service = container.experiments
     record = service.create(
-        CreateExperimentRequest(name="bad target", dataset_uri=str(path), target_column="y"), USER
+        CreateExperimentRequest(name="bad target", dataset_uri=uri, target_column="y"), USER
     )
     container.orchestrator.wait_for_idle(timeout=300)
 

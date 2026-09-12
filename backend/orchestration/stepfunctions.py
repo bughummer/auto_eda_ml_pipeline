@@ -12,7 +12,7 @@ from typing import Any
 from backend.errors import ConfigurationError, UpstreamError
 from backend.orchestration.base import ExecutionHandle
 from ml_engine.contracts.experiment import ExperimentRecord
-from ml_engine.io import ExperimentLayout
+from ml_engine.io import ExperimentLayout, parse_s3_uri
 
 LOGGER = logging.getLogger("ml_factory.orchestration.stepfunctions")
 
@@ -26,12 +26,10 @@ class StepFunctionsOrchestrator:
         *,
         eda_state_machine_arn: str,
         training_state_machine_arn: str,
-        experiments_table: str,
     ) -> None:
         self._client = client
         self._eda_arn = eda_state_machine_arn
         self._training_arn = training_state_machine_arn
-        self._table = experiments_table
 
     def start_eda(self, record: ExperimentRecord) -> ExecutionHandle:
         if not self._eda_arn:
@@ -63,6 +61,7 @@ class StepFunctionsOrchestrator:
     # --- inputs -----------------------------------------------------------
     def _eda_input(self, record: ExperimentRecord) -> dict[str, Any]:
         layout = ExperimentLayout(base=record.artifact_prefix)
+        state = parse_s3_uri(layout.workflow_state)
         return {
             "experiment_id": record.experiment_id,
             "dataset_s3_uri": record.dataset.uri,
@@ -70,19 +69,23 @@ class StepFunctionsOrchestrator:
             "output_s3_prefix": record.artifact_prefix,
             "file_format": record.dataset.file_format,
             "eda_artifact_uri": layout.eda,
-            "experiments_table": self._table,
+            # Where the workflow writes its own state document.
+            "artifact_bucket": state.bucket,
+            "state_key": state.key,
         }
 
     def _training_input(self, record: ExperimentRecord) -> dict[str, Any]:
         layout = ExperimentLayout(base=record.artifact_prefix)
+        state = parse_s3_uri(layout.workflow_state)
         return {
             "experiment_id": record.experiment_id,
             "output_s3_prefix": record.artifact_prefix,
             "config_uri": layout.experiment_config,
             "comparison_uri": layout.comparison,
             # The Map state iterates this list, so the catalogue can grow without an ASL change.
-            "models": sorted(record.model_statuses),
-            "experiments_table": self._table,
+            "models": sorted(record.requested_models),
+            "artifact_bucket": state.bucket,
+            "state_key": state.key,
         }
 
     def _start(self, arn: str, name: str, payload: dict[str, Any]) -> ExecutionHandle:

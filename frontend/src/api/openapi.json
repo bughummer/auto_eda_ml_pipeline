@@ -1148,6 +1148,14 @@
       "ExperimentListResponse": {
         "additionalProperties": false,
         "properties": {
+          "available_roots": {
+            "description": "Artifact buckets this platform may read.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Roots",
+            "type": "array"
+          },
           "count": {
             "title": "Count",
             "type": "integer"
@@ -1158,6 +1166,12 @@
             },
             "title": "Experiments",
             "type": "array"
+          },
+          "root": {
+            "default": "",
+            "description": "The artifact bucket these experiments were read from.",
+            "title": "Root",
+            "type": "string"
           }
         },
         "required": [
@@ -1169,7 +1183,7 @@
       },
       "ExperimentRecord": {
         "additionalProperties": false,
-        "description": "Metadata and state only. Large ML artifacts always live in the object store.",
+        "description": "The composed view returned by the API. Never stored as one object.",
         "properties": {
           "artifact_prefix": {
             "title": "Artifact Prefix",
@@ -1263,14 +1277,6 @@
             ],
             "title": "Failure Message"
           },
-          "model_statuses": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "model name -> ModelRunStatus, mirrored for cheap polling.",
-            "title": "Model Statuses",
-            "type": "object"
-          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1296,6 +1302,13 @@
               }
             ],
             "title": "Report Uri"
+          },
+          "requested_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Models",
+            "type": "array"
           },
           "requested_problem_type": {
             "$ref": "#/components/schemas/RequestedProblemType",
@@ -1861,6 +1874,13 @@
             "title": "Artifact Root",
             "type": "string"
           },
+          "artifact_roots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifact Roots",
+            "type": "array"
+          },
           "available_models": {
             "items": {
               "type": "string"
@@ -1885,10 +1905,6 @@
             "title": "Credential Source",
             "type": "string"
           },
-          "mode": {
-            "title": "Mode",
-            "type": "string"
-          },
           "orchestrator": {
             "title": "Orchestrator",
             "type": "string"
@@ -1900,7 +1916,6 @@
         },
         "required": [
           "status",
-          "mode",
           "orchestrator",
           "artifact_root",
           "bedrock_enabled"
@@ -3751,8 +3766,30 @@
   "paths": {
     "/api/v1/experiments": {
       "get": {
+        "description": "Experiments found under an artifact bucket, newest first.",
         "operationId": "list_experiments_api_v1_experiments_get",
         "parameters": [
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
+            }
+          },
           {
             "in": "query",
             "name": "limit",
@@ -3926,6 +3963,27 @@
               "title": "Experiment Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
+            }
           }
         ],
         "responses": {
@@ -3967,6 +4025,27 @@
             "schema": {
               "title": "Experiment Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
             }
           }
         ],
@@ -4102,6 +4181,27 @@
               "title": "Experiment Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
+            }
           }
         ],
         "responses": {
@@ -4143,6 +4243,27 @@
             "schema": {
               "title": "Experiment Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
             }
           }
         ],
@@ -4251,6 +4372,27 @@
             "schema": {
               "title": "Experiment Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
             }
           }
         ],
@@ -4438,6 +4580,27 @@
               "title": "Experiment Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
+            }
           }
         ],
         "responses": {
@@ -4548,6 +4711,27 @@
               "title": "Experiment Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
+            }
           }
         ],
         "responses": {
@@ -4589,6 +4773,27 @@
             "schema": {
               "title": "Experiment Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+            "in": "query",
+            "name": "root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artifact bucket URI to read from. Defaults to this platform's bucket.",
+              "examples": [
+                "s3://my-ml-factory-artifacts"
+              ],
+              "title": "Root"
             }
           }
         ],

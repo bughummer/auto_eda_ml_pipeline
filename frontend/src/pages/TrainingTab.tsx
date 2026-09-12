@@ -30,13 +30,14 @@ import type { ModelRunState, TrainingRequest } from '../api/types';
 import { QueryState, StatusTag } from '../components/common';
 import { MODEL_STATUS_COLORS, formatNumber, humanize } from '../lib/format';
 
-export function TrainingTab({ experimentId }: { experimentId: string }) {
+export function TrainingTab({ experimentId, root }: { experimentId: string; root?: string }) {
   const { message } = AntApp.useApp();
-  const experiment = useExperiment(experimentId);
-  const config = useTrainingConfig(experimentId);
+  const experiment = useExperiment(experimentId, root);
+  const config = useTrainingConfig(experimentId, root);
   const catalogue = useModelCatalogue();
-  const status = useTrainingStatus(experimentId);
-  const comparison = useComparison(experimentId);
+  const status = useTrainingStatus(experimentId, root);
+  const comparison = useComparison(experimentId, root);
+  const isReadOnly = Boolean(root);
   const start = useStartTraining(experimentId);
   const [form] = Form.useForm<TrainingRequest>();
 
@@ -146,7 +147,12 @@ export function TrainingTab({ experimentId }: { experimentId: string }) {
                 )}
 
                 <Space>
-                  <Button type="primary" htmlType="submit" loading={start.isPending} disabled={isRunning}>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={start.isPending}
+                    disabled={isRunning || isReadOnly}
+                  >
                     {hasStarted ? 'Run again' : 'Start training'}
                   </Button>
                   {isRunning && <Typography.Text type="secondary">Training is running…</Typography.Text>}

@@ -21,13 +21,6 @@ Names are matched with or without the ``ML_FACTORY_`` prefix: ``AWS_REGION`` and
 helper variables here (prefix them with ``_`` to be explicit).
 """
 
-# ---------------------------------------------------------------------------
-# Deployment mode
-# ---------------------------------------------------------------------------
-# "local" -> filesystem + in-process runner, no AWS at all (development, demos)
-# "aws"   -> S3 + Step Functions + DynamoDB
-MODE = "local"
-
 LOG_LEVEL = "INFO"
 
 # ---------------------------------------------------------------------------
@@ -47,14 +40,21 @@ AWS_PROFILE = None  # "ml-factory"
 AWS_REGION = "eu-central-1"
 
 # ---------------------------------------------------------------------------
-# AWS resources (required when MODE = "aws")
+# AWS resources (all required)
 # ---------------------------------------------------------------------------
 # All of these come from the CloudFormation stack outputs; see infrastructure/README.md.
+#
+# Artifacts and experiment records both live in the artifact bucket. There is no database.
 ARTIFACT_BUCKET = ""  # "s3://my-ml-factory-artifacts"
-EXPERIMENTS_TABLE = "ml-factory-experiments"
 EDA_STATE_MACHINE_ARN = ""  # "arn:aws:states:eu-central-1:123456789012:stateMachine:ml-factory-eda"
 TRAINING_STATE_MACHINE_ARN = ""  # "arn:aws:states:...:stateMachine:ml-factory-training"
-KMS_KEY_ID = ""  # customer-managed key protecting artifacts and records
+KMS_KEY_ID = ""  # customer-managed key protecting the artifact bucket
+
+# Other artifact buckets the UI may browse read-only, to see experiments that another
+# environment produced. New experiments are always written to ARTIFACT_BUCKET.
+ADDITIONAL_ARTIFACT_ROOTS = [
+    # "s3://ml-factory-artifacts-prod",
+]
 
 # Datasets outside these prefixes are rejected before any AWS call is made.
 # An empty list denies every dataset — that is deliberate, not a bug.
@@ -68,12 +68,6 @@ ALLOWED_DATASET_PREFIXES = [
 BEDROCK_ENABLED = False
 BEDROCK_MODEL_ID = ""  # the model id approved for use in your account
 BEDROCK_MAX_TOKENS = 4096
-
-# ---------------------------------------------------------------------------
-# Local mode
-# ---------------------------------------------------------------------------
-LOCAL_ROOT = "./var/ml-factory"  # /app/var/ml-factory inside the container
-LOCAL_MAX_WORKERS = 2
 
 # ---------------------------------------------------------------------------
 # Web layer

@@ -13,15 +13,15 @@ router = APIRouter(tags=["health"])
 @router.get("/health", response_model=HealthResponse)
 def health(container: ContainerDep) -> HealthResponse:
     settings = container.settings
-    problems = settings.validate_for_mode()
+    problems = settings.validate_configuration()
     models = sorted(
         {name for problem_type in ProblemType for name in default_model_names(problem_type)}
     )
     return HealthResponse(
         status="degraded" if problems else "ok",
-        mode=settings.mode.value,
         orchestrator=container.orchestrator.name,
         artifact_root=settings.artifact_root,
+        artifact_roots=settings.artifact_roots,
         credential_source=settings.credential_source(),
         bedrock_enabled=settings.bedrock_enabled,
         configuration_problems=problems,

@@ -46,42 +46,64 @@ stays with the person.
 | Nothing is excluded automatically except the target | the platform recommends; the data scientist decides |
 | Every artifact is a versioned Pydantic contract | producer and consumer cannot drift apart |
 
-## Quick start (no AWS required)
+## What runs where
+
+Exactly one thing runs on the corporate server: this container, serving the API and the UI
+from one process. Everything else is AWS, and only two AWS data services are involved.
+
+| | Where |
+|---|---|
+| Web UI + API | the container on the corporate server |
+| EDA, preprocessing, training, evaluation | ephemeral SageMaker jobs |
+| Stage sequencing, retries, per-model isolation | Step Functions |
+| Datasets | S3, read-only, allow-listed prefixes |
+| Artifacts **and experiment records** | S3, one prefix per experiment |
+| Semantic analysis (optional) | Bedrock |
+
+There is no database. An experiment is a self-contained S3 prefix holding its record, EDA,
+configuration, models, comparison and reports — copy the prefix and you have copied the
+experiment.
+
+## Deploying
+
+Two steps, in this order. The first is AWS-side and is needed once per release; the second
+runs the control plane.
 
 ```bash
-make install                 # python 3.12 venv + npm install
-make demo                    # a full experiment end to end against the local adapters
-make test                    # 335 tests
-make dev                     # API on :8000, UI on :5173
-```
+# 1. Build and push the job image SageMaker runs, upload the workflow definitions, and
+#    create or update the stack (S3 + KMS + IAM + the two state machines).
+AWS_REGION=eu-central-1 AWS_ACCOUNT_ID=123456789012 \
+ARTIFACT_BUCKET=my-ml-factory-artifacts \
+APPROVED_DATA_BUCKET=my-approved-data \
+DEFINITIONS_BUCKET=my-deploy-bucket \
+make deploy-aws
 
-`make demo` generates a sample dataset that deliberately contains an identifier, a constant
-column, a high-missingness column, a leaked copy of the target and a post-outcome column, then
-runs a complete experiment. It prints what the platform found, what it recommended, and the
-model comparison that results once those recommendations are acted on.
-
-In local mode (`ML_FACTORY_MODE=local`, the default) the platform runs the *same* job code in
-a background thread pool against a directory tree that mirrors the S3 layout. Switching to
-`ML_FACTORY_MODE=aws` swaps two adapters — storage and orchestration — and nothing else.
-
-## Running with Docker
-
-One service: FastAPI serves the API and the built React app from the same process, so there is
-one container, one port and one origin — no CORS and no separate web server.
-
-```bash
-cp .env.example .env          # the container mounts this read-only
-docker network create dev_network   # once per host, if it does not exist yet
+# 2. Put the stack outputs into config/secrets/config.py, then run the control plane.
+cp config/secrets/config.sample.py config/secrets/config.py   # fill in the outputs
+cp .env.example .env
+docker network create dev_network            # once per host, if it does not exist yet
 docker compose up -d --build
 # http://<host>:7570
 ```
+
+`make deploy-aws` exists because `docker compose` cannot do that work: compose runs containers
+on this host, while SageMaker needs its image in ECR and Step Functions needs its state
+machines to exist in AWS. It is one idempotent script (`scripts/deploy_aws.sh`) — re-run it to
+ship a new job image.
+
+The job image is a *different* image from the one compose builds: compose builds the control
+plane (FastAPI + the React app); `infrastructure/docker/Dockerfile` builds what SageMaker runs.
+
+## The container
+
+One service: FastAPI serves the API and the built React app from the same process, so there is
+one container, one port and one origin — no CORS and no separate web server.
 
 | Detail | Value |
 |---|---|
 | Published port | `7570` on the host, `8520` in the container |
 | Network | the external `dev_network`, joined by the service |
-| Config | `./.env` mounted read-only at `/app/.env` |
-| Local-mode artifacts | the named volume `ml_factory_artifacts` at `/app/var` |
+| Configuration | `./.env` and `./config/secrets` mounted read-only |
 | Health | `curl http://localhost:7570/api/v1/health`, also wired as a container `HEALTHCHECK` |
 
 Behind the corporate proxy, `http_proxy` and `https_proxy` are passed as build arguments (npm
@@ -95,33 +117,8 @@ export https_proxy=http://10.0.139.93:8080
 docker compose up -d --build
 ```
 
-### What runs where
-
-| | `local` mode | `aws` mode |
-|---|---|---|
-| Runs on the corporate server | this container, and nothing else | this container, and nothing else |
-| EDA, preprocessing, training, evaluation | inside this container, in a thread pool | ephemeral SageMaker jobs |
-| Datasets read from | `/data` — the host directory mounted read-only (`ML_FACTORY_DATA_DIR`) | S3, by the jobs |
-| Artifacts written to | the `ml_factory_artifacts` volume | S3 |
-| Experiment records | in memory; lost on restart | DynamoDB |
-
 Nothing else is installed on the host: the image builds the React app itself, so no Node and
 no Python venv are needed to run the platform — those are development conveniences only.
-
-Two caveats worth knowing before you pick a mode:
-
-* **`local` mode does all the ML work inside this container**, on the server's own CPU and
-  RAM, and it keeps experiment records in memory, so a restart loses the list (the artifacts
-  on the volume survive). It is meant for evaluation, demos and development, not for a shared
-  production instance.
-* **`aws` mode needs a one-time deployment that `docker compose` does not perform**: build and
-  push the *job* image (`infrastructure/docker/Dockerfile`, a different image from this one),
-  upload the two Step Functions definitions, and deploy the CloudFormation stack. See
-  [`infrastructure/README.md`](infrastructure/README.md). After that, this container is again
-  the only thing running locally.
-
-In `aws` mode the container needs credentials: fill in `config/secrets/config.py`, uncomment
-the `~/.aws` mount in `docker-compose.yml`, or attach an instance role to the host.
 
 ## Credentials and configuration
 
@@ -157,16 +154,26 @@ The settings that matter:
 
 | Variable | Meaning |
 |---|---|
-| `ML_FACTORY_MODE` | `local` (filesystem + in-process runner) or `aws` (S3 + Step Functions + DynamoDB) |
-| `ML_FACTORY_ARTIFACT_BUCKET` | `s3://…` root for experiment artifacts |
+| `ML_FACTORY_ARTIFACT_BUCKET` | `s3://…` root for artifacts **and experiment records** |
+| `ML_FACTORY_ADDITIONAL_ARTIFACT_ROOTS` | other approved buckets the UI may browse read-only |
 | `ML_FACTORY_ALLOWED_DATASET_PREFIXES` | dataset allow-list; an empty list denies everything, deliberately |
 | `ML_FACTORY_EDA_STATE_MACHINE_ARN` / `…_TRAINING_…` | the two workflows |
-| `ML_FACTORY_EXPERIMENTS_TABLE` | DynamoDB table holding experiment records |
 | `ML_FACTORY_BEDROCK_ENABLED` / `…_MODEL_ID` | enables the semantic analysis tab |
 | `HTTPS_PROXY` / `NO_PROXY` | corporate proxy; applied explicitly to every boto3 client |
 
 `GET /api/v1/health` reports the active mode and lists any configuration that would fail at
 runtime, so a misconfigured deployment says so instead of failing on the first experiment.
+
+## Browsing previous experiments
+
+The experiment list has an artifact-bucket selector. Choosing a bucket lists every experiment
+stored under it — status, target, best model and score — and opening one shows its full EDA,
+feature review, training result and comparison, read-only.
+
+This works because a record is just objects in the bucket, so results produced by another
+environment (a production instance, a colleague's account) need no shared database and no
+import step. Add those buckets to `ML_FACTORY_ADDITIONAL_ARTIFACT_ROOTS`; only configured
+buckets are readable, and new experiments are always written to this platform's own bucket.
 
 ## Repository layout
 
@@ -224,11 +231,17 @@ state machine, not the API, not the UI. See [`AGENTS.md`](AGENTS.md).
 ## Testing
 
 ```bash
+make install       # python 3.12 venv + npm install
 make test          # everything
 make test-fast     # skips the slow end-to-end experiments
 make lint          # ruff
 make build-front   # tsc --noEmit + vite build
 ```
+
+The suite needs no AWS. It substitutes two adapters — an in-memory object store addressed with
+real `s3://` URIs, and an orchestrator that runs the same job entrypoints in-process — so the
+production code paths, including URI validation, the dataset allow-list and the artifact
+layout, are the ones under test. Both live in `tests/support/`; neither ships.
 
 The suite covers the engine unit by unit, the job entrypoints, the control plane, the
 documented architecture boundaries, and a complete local experiment from creation to

@@ -4,7 +4,7 @@ import { Alert, Button, Card, Form, Input, Select, Space, Typography } from 'ant
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '../api/client';
-import { useCreateExperiment, useHealth } from '../api/hooks';
+import { useCreateExperiment } from '../api/hooks';
 
 interface FormValues {
   name: string;
@@ -16,8 +16,6 @@ interface FormValues {
 export function CreateExperimentPage() {
   const navigate = useNavigate();
   const create = useCreateExperiment();
-  const { data: health } = useHealth();
-  const isLocal = health?.mode === 'local';
 
   const onFinish = (values: FormValues) => {
     create.mutate(values, {
@@ -44,16 +42,12 @@ export function CreateExperimentPage() {
         <Form.Item
           name="dataset_uri"
           label="Dataset"
-          extra={
-            isLocal
-              ? 'Local mode: an absolute path to a CSV, TSV or Parquet file is accepted.'
-              : 'S3 URI of an approved dataset, for example s3://approved-data/curated/churn.parquet'
-          }
+          extra="S3 URI of an approved dataset, for example s3://approved-data/curated/churn.parquet"
           rules={[
             { required: true, message: 'Enter the dataset location' },
             {
               validator: (_rule, value: string) =>
-                isLocal || !value || value.startsWith('s3://')
+                !value || value.startsWith('s3://')
                   ? Promise.resolve()
                   : Promise.reject(new Error('The dataset URI must start with s3://')),
             },

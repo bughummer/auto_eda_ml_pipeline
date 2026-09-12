@@ -41,6 +41,8 @@ class ObjectStore(Protocol):
 
     def list_uris(self, prefix: str) -> list[str]: ...
 
+    def list_prefixes(self, prefix: str) -> list[str]: ...
+
     def stat(self, uri: str) -> ObjectMetadata | None: ...
 
     def download(self, uri: str, destination: Path) -> Path: ...
@@ -78,6 +80,13 @@ class LocalObjectStore:
         if not root.exists():
             return []
         return sorted(str(p) for p in root.rglob("*") if p.is_file())
+
+    def list_prefixes(self, prefix: str) -> list[str]:
+        """Immediate child "directories" — one entry per experiment, not per object."""
+        root = _to_path(prefix)
+        if not root.is_dir():
+            return []
+        return sorted(f"{child}/" for child in root.iterdir() if child.is_dir())
 
     def stat(self, uri: str) -> ObjectMetadata | None:
         path = _to_path(uri)
