@@ -63,8 +63,12 @@ def _summary(
         validation_fraction_actual=round(len(validation_index) / total, 6) if total else 0.0,
         random_seed=config.random_seed,
         stratified=stratified,
-        train_class_distribution=_class_distribution(target.loc[train_index]) if stratified and target is not None else None,
-        validation_class_distribution=_class_distribution(target.loc[validation_index]) if stratified and target is not None else None,
+        train_class_distribution=_class_distribution(target.loc[train_index])
+        if stratified and target is not None
+        else None,
+        validation_class_distribution=_class_distribution(target.loc[validation_index])
+        if stratified and target is not None
+        else None,
     )
 
 
@@ -75,7 +79,7 @@ def _validate_size(frame: pd.DataFrame, config: SplitConfig) -> None:
             f"Only {rows} usable rows. At least {2 * MIN_ROWS_PER_FOLD} are required to build a "
             "training and a validation fold."
         )
-    if int(round(rows * config.validation_fraction)) < MIN_ROWS_PER_FOLD:
+    if round(rows * config.validation_fraction) < MIN_ROWS_PER_FOLD:
         raise SplittingError(
             f"validation_fraction={config.validation_fraction} yields fewer than "
             f"{MIN_ROWS_PER_FOLD} validation rows for {rows} rows."
@@ -146,7 +150,7 @@ class StratifiedRandomSplit:
             result.warnings.extend(warnings)
             return result
 
-        expected_validation = int(round(len(frame) * config.validation_fraction))
+        expected_validation = round(len(frame) * config.validation_fraction)
         if expected_validation < len(counts):
             warnings.append(
                 AnalysisWarning(
@@ -202,9 +206,8 @@ def resolve_strategy(problem_type: ProblemType, config: SplitConfig) -> SplitStr
         ):
             return STRATEGIES[RandomSplit.name]
         return strategy
-    raise SplittingError(
-        f"Unknown split strategy {config.strategy!r}. Available: {', '.join(available_strategies())}."
-    )
+    available = ", ".join(available_strategies())
+    raise SplittingError(f"Unknown split strategy {config.strategy!r}. Available: {available}.")
 
 
 def split_dataset(
@@ -216,5 +219,5 @@ def split_dataset(
     """Split a dataset with the strategy appropriate for the problem type."""
     strategy = resolve_strategy(problem_type, config)
     seed = config.random_seed
-    np.random.seed(seed)  # noqa: NPY002 - some estimators still read the global seed
+    np.random.seed(seed)
     return strategy.split(frame, target, config)

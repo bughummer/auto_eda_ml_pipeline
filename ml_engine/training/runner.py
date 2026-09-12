@@ -4,9 +4,11 @@ This is the deterministic core of the training job: no AWS, no IO, no orchestrat
 job entrypoint reads artifacts, calls this, and writes the result back.
 """
 
+import contextlib
 import platform
 import sys
 import time
+import warnings as python_warnings
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -25,6 +27,13 @@ from ml_engine.models import ModelPlugin, TrainingContext
 from ml_engine.preprocessing import FeaturePipeline
 
 OVERFITTING_GAP = 0.15
+
+# Library warnings worth showing a data scientist, mapped to stable rule ids.
+_REPORTED_FIT_WARNINGS = {
+    "ConvergenceWarning": "model_did_not_converge",
+    "DataConversionWarning": "input_data_converted",
+    "UndefinedMetricWarning": "undefined_metric_during_fit",
+}
 
 
 class TrainingError(RuntimeError):
@@ -49,7 +58,7 @@ def build_training_context(
     return TrainingContext(
         problem_type=problem_type,
         random_seed=random_seed,
-        row_count=int(len(y_train)),
+        row_count=len(y_train),
         feature_count=feature_count,
         class_labels=class_labels,
         class_counts=class_counts,
@@ -130,14 +139,21 @@ def train_model(
     started = datetime.now(UTC)
     clock = time.perf_counter()
     try:
-        estimator = plugin.fit(estimator, x_train, y_train, context)
-    except Exception as exc:  # noqa: BLE001 - normalized into a domain error for the job
+        with python_warnings.catch_warnings(record=True) as captured:
+            python_warnings.simplefilter("always")
+            estimator = plugin.fit(estimator, x_train, y_train, context)
+    except Exception as exc:
         raise TrainingError(f"{plugin.display_name} failed during fit: {exc}") from exc
     duration = time.perf_counter() - clock
     finished = datetime.now(UTC)
+    warnings.extend(_fit_warnings(captured, plugin.display_name))
 
     class_labels = plugin.class_labels(estimator) if problem_type.is_classification else None
-    positive_class = _positive_class(class_labels, context) if problem_type is ProblemType.BINARY_CLASSIFICATION else None
+    positive_class = (
+        _positive_class(class_labels, context)
+        if problem_type is ProblemType.BINARY_CLASSIFICATION
+        else None
+    )
 
     validation_metrics = evaluate(
         problem_type,
@@ -190,8 +206,8 @@ def train_model(
         hyperparameters=_json_safe(params),
         features_used=pipeline.feature_names,
         feature_count=len(pipeline.feature_names),
-        training_row_count=int(len(train_frame)),
-        validation_row_count=int(len(validation_frame)),
+        training_row_count=len(train_frame),
+        validation_row_count=len(validation_frame),
         training_started_at=started,
         training_completed_at=finished,
         training_duration_seconds=round(duration, 4),
@@ -220,6 +236,27 @@ def _positive_class(class_labels: list[str] | None, context: TrainingContext) ->
         if present:
             return min(present, key=lambda label: present[label])
     return labels[-1]
+
+
+def _fit_warnings(captured, display_name: str) -> list[AnalysisWarning]:
+    """Surface library warnings that change how a result should be read (e.g. non-convergence)."""
+    collected: list[AnalysisWarning] = []
+    seen: set[str] = set()
+    for entry in captured:
+        category = entry.category.__name__
+        if category not in _REPORTED_FIT_WARNINGS or category in seen:
+            continue
+        seen.add(category)
+        collected.append(
+            AnalysisWarning(
+                rule=_REPORTED_FIT_WARNINGS[category],
+                category=WarningCategory.MODEL,
+                severity=Severity.MEDIUM,
+                message=f"{display_name}: {str(entry.message).splitlines()[0]}",
+                details={"warning_class": category},
+            )
+        )
+    return collected
 
 
 def _overfitting_warnings(metric: str, train_metrics, validation_metrics) -> list[AnalysisWarning]:
@@ -266,10 +303,8 @@ def package_versions(plugin: ModelPlugin | None = None) -> dict[str, str]:
         "scikit-learn": sklearn.__version__,
     }
     if plugin is not None:
-        try:
+        with contextlib.suppress(Exception):  # version reporting is never fatal
             versions[plugin.library] = plugin.library_version()
-        except Exception:  # noqa: BLE001 - version reporting is never fatal
-            pass
     return versions
 
 

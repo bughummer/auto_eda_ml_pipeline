@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
+from jobs._common.runtime import JobError, base_parser, run_entrypoint
 from ml_engine.contracts.common import Severity, WarningCategory
 from ml_engine.contracts.config import ExperimentConfig
 from ml_engine.contracts.eda import EdaReport
@@ -30,8 +31,6 @@ from ml_engine.io import (
 from ml_engine.models import get_plugin
 from ml_engine.preprocessing import FeaturePipeline, PreprocessingError, plan_columns
 from ml_engine.splitting import SplittingError, split_dataset
-
-from jobs._common.runtime import JobError, base_parser, run_entrypoint
 
 LOGGER = logging.getLogger("ml_factory.jobs.preparation")
 
@@ -60,7 +59,7 @@ def run_preparation(
     LOGGER.info("Loading dataset %s", config.dataset.uri)
     dataset = load_dataset(store, config.dataset.uri, config.dataset.file_format)
     frame = dataset.frame
-    rows_before = int(len(frame))
+    rows_before = len(frame)
 
     if config.target_column not in frame.columns:
         raise JobError(
@@ -69,13 +68,15 @@ def run_preparation(
         )
 
     frame = frame[frame[config.target_column].notna()]
-    rows_dropped = rows_before - int(len(frame))
+    rows_dropped = rows_before - len(frame)
     if rows_dropped:
         warnings.append(
             AnalysisWarning(
                 rule="rows_dropped_missing_target",
                 category=WarningCategory.TARGET,
-                severity=Severity.MEDIUM if rows_dropped / max(rows_before, 1) > 0.05 else Severity.LOW,
+                severity=Severity.MEDIUM
+                if rows_dropped / max(rows_before, 1) > 0.05
+                else Severity.LOW,
                 message=f"{rows_dropped} row(s) without a target value were dropped.",
                 column=config.target_column,
                 details={"dropped_rows": rows_dropped},
@@ -131,7 +132,7 @@ def run_preparation(
         usable_features=plan.usable,
         dropped_features=plan.dropped,
         rows_before=rows_before,
-        rows_after=int(len(frame)),
+        rows_after=len(frame),
         rows_dropped_missing_target=rows_dropped,
         split=split.summary,
         preprocessing=preprocessing_metadata,
@@ -167,7 +168,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     return run_entrypoint(
-        build_parser(), _handler, argv, failure_uri=lambda _a, l: l.path("validation/failure.json")
+        build_parser(),
+        _handler,
+        argv,
+        failure_uri=lambda _args, layout: layout.path("validation/failure.json"),
     )
 
 

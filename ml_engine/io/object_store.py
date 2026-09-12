@@ -11,11 +11,9 @@ import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class ObjectNotFoundError(FileNotFoundError):
@@ -115,13 +113,15 @@ def write_model(store: ObjectStore, uri: str, model: BaseModel) -> str:
     return uri
 
 
-def read_model(store: ObjectStore, uri: str, model_type: type[ModelT]) -> ModelT:
+def read_model[ModelT: BaseModel](store: ObjectStore, uri: str, model_type: type[ModelT]) -> ModelT:
     """Read and validate a contract artifact. Raises ``ObjectNotFoundError`` if absent."""
     raw = store.read_bytes(uri)
     return model_type.model_validate_json(raw)
 
 
-def read_model_if_exists(store: ObjectStore, uri: str, model_type: type[ModelT]) -> ModelT | None:
+def read_model_if_exists[ModelT: BaseModel](
+    store: ObjectStore, uri: str, model_type: type[ModelT]
+) -> ModelT | None:
     try:
         return read_model(store, uri, model_type)
     except (ObjectNotFoundError, FileNotFoundError):

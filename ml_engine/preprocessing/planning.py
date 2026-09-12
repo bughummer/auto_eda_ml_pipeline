@@ -149,7 +149,7 @@ def _semantic_type(
         profile = eda.column(feature)
         if profile is not None:
             return profile.semantic_type
-    row_count = int(len(series))
+    row_count = len(series)
     return infer_semantic_type(
         series,
         profiling_config,

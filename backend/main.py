@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import experiments, health, models
+from backend.api.routes import dictionary, experiments, health, models, reasoning
 from backend.config import Settings, get_settings
 from backend.container import build_container
 from backend.errors import register_error_handlers
@@ -78,6 +78,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix=settings.api_prefix)
     app.include_router(models.router, prefix=settings.api_prefix)
     app.include_router(experiments.router, prefix=settings.api_prefix)
+    app.include_router(dictionary.router, prefix=settings.api_prefix)
+    app.include_router(reasoning.router, prefix=settings.api_prefix)
     return app
 
 

@@ -2,13 +2,6 @@
 
 from fastapi import APIRouter, Query, status
 
-from ml_engine.contracts.comparison import ComparisonReport, ExperimentSummary
-from ml_engine.contracts.config import FeatureSelection
-from ml_engine.contracts.eda import EdaReport
-from ml_engine.contracts.experiment import ExperimentRecord
-from ml_engine.contracts.leakage import LeakageReport
-from ml_engine.contracts.model import ModelMetadata
-
 from backend.api.dependencies import CurrentUserDep, ExperimentServiceDep
 from backend.schemas.experiments import (
     CreateExperimentRequest,
@@ -21,6 +14,12 @@ from backend.schemas.experiments import (
     TrainingStatusResponse,
     UpdateFeatureSelectionRequest,
 )
+from ml_engine.contracts.comparison import ComparisonReport, ExperimentSummary
+from ml_engine.contracts.config import FeatureSelection
+from ml_engine.contracts.eda import EdaReport
+from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.contracts.leakage import LeakageReport
+from ml_engine.contracts.model import ModelMetadata
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
@@ -124,9 +123,7 @@ def get_comparison(experiment_id: str, service: ExperimentServiceDep) -> Compari
 
 
 @router.get("/{experiment_id}/models/{model_name}", response_model=ModelMetadata)
-def get_model(
-    experiment_id: str, model_name: str, service: ExperimentServiceDep
-) -> ModelMetadata:
+def get_model(experiment_id: str, model_name: str, service: ExperimentServiceDep) -> ModelMetadata:
     return service.model_metadata(experiment_id, model_name)
 
 

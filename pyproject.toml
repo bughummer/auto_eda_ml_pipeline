@@ -38,10 +38,16 @@ ignore = ["N818", "RUF012", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG", "E501"]
+# scikit-learn's transformer API fixes these signatures: capital X, and a y that
+# stateless transformers ignore.
+"ml_engine/preprocessing/transformers.py" = ["N803", "ARG002"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q --strict-markers"
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient`:UserWarning",
+]
 markers = ["slow: long-running end-to-end tests"]

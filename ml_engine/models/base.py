@@ -50,7 +50,10 @@ class TrainingContext:
 
     def positive_negative_counts(self) -> tuple[int, int] | None:
         """(positive, negative) counts for a binary problem, ordered by label."""
-        if self.problem_type is not ProblemType.BINARY_CLASSIFICATION or len(self.class_counts) != 2:
+        if (
+            self.problem_type is not ProblemType.BINARY_CLASSIFICATION
+            or len(self.class_counts) != 2
+        ):
             return None
         ordered = sorted(self.class_counts.items(), key=lambda item: item[0])
         negative, positive = ordered[0][1], ordered[1][1]
@@ -162,7 +165,9 @@ class ModelPlugin(ABC):
             available=available,
             unavailable_reason=reason,
             default_parameters=_json_safe(
-                self.default_params(TrainingContext(problem_type=problem_type or ProblemType.BINARY_CLASSIFICATION))
+                self.default_params(
+                    TrainingContext(problem_type=problem_type or ProblemType.BINARY_CLASSIFICATION)
+                )
             )
             if available
             else {},
@@ -173,7 +178,9 @@ class ModelPlugin(ABC):
 def _json_safe(params: dict[str, Any]) -> dict[str, float | int | str | bool | None]:
     safe: dict[str, float | int | str | bool | None] = {}
     for key, value in params.items():
-        safe[key] = value if isinstance(value, (int, float, str, bool)) or value is None else str(value)
+        safe[key] = (
+            value if isinstance(value, (int, float, str, bool)) or value is None else str(value)
+        )
     return safe
 
 

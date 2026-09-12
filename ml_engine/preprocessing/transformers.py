@@ -22,7 +22,7 @@ class DatetimeFeatureExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, features: tuple[str, ...] = ("year", "month", "day_of_week")) -> None:
         self.features = features
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "DatetimeFeatureExtractor":  # noqa: N803
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "DatetimeFeatureExtractor":
         self.feature_names_in_ = list(X.columns)
         self.n_features_in_ = len(self.feature_names_in_)
         unsupported = [f for f in self.features if f not in SUPPORTED_DATETIME_FEATURES]
@@ -33,7 +33,7 @@ class DatetimeFeatureExtractor(BaseEstimator, TransformerMixin):
             )
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:  # noqa: N803
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         frame = pd.DataFrame(index=X.index)
         for column in self.feature_names_in_:
             parsed = pd.to_datetime(X[column], errors="coerce", format="mixed")
@@ -41,9 +41,13 @@ class DatetimeFeatureExtractor(BaseEstimator, TransformerMixin):
                 frame[f"{column}__{feature}"] = _datetime_part(parsed, feature)
         return frame
 
-    def get_feature_names_out(self, input_features=None) -> np.ndarray:  # noqa: ARG002
+    def get_feature_names_out(self, input_features=None) -> np.ndarray:
         return np.array(
-            [f"{column}__{feature}" for column in self.feature_names_in_ for feature in self.features]
+            [
+                f"{column}__{feature}"
+                for column in self.feature_names_in_
+                for feature in self.features
+            ]
         )
 
 
@@ -73,17 +77,17 @@ class BooleanEncoder(BaseEstimator, TransformerMixin):
     _TRUE = frozenset({"true", "yes", "y", "t", "1", "1.0"})
     _FALSE = frozenset({"false", "no", "n", "f", "0", "0.0"})
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "BooleanEncoder":  # noqa: N803
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "BooleanEncoder":
         self.feature_names_in_ = list(X.columns)
         self.n_features_in_ = len(self.feature_names_in_)
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:  # noqa: N803
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(
             {column: _to_binary(X[column]) for column in self.feature_names_in_}, index=X.index
         )
 
-    def get_feature_names_out(self, input_features=None) -> np.ndarray:  # noqa: ARG002
+    def get_feature_names_out(self, input_features=None) -> np.ndarray:
         return np.array(self.feature_names_in_)
 
 
@@ -105,12 +109,12 @@ class CategoricalAsString(BaseEstimator, TransformerMixin):
     def __init__(self, fill_value: str = "__missing__") -> None:
         self.fill_value = fill_value
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "CategoricalAsString":  # noqa: N803
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "CategoricalAsString":
         self.feature_names_in_ = list(X.columns)
         self.n_features_in_ = len(self.feature_names_in_)
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:  # noqa: N803
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(
             {
                 column: X[column].astype("string").fillna(self.fill_value).astype("object")
@@ -119,5 +123,5 @@ class CategoricalAsString(BaseEstimator, TransformerMixin):
             index=X.index,
         )
 
-    def get_feature_names_out(self, input_features=None) -> np.ndarray:  # noqa: ARG002
+    def get_feature_names_out(self, input_features=None) -> np.ndarray:
         return np.array(self.feature_names_in_)

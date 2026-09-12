@@ -92,22 +92,22 @@ def exact_target_duplicate(ctx: LeakageContext) -> list[LeakageFinding]:
 
         if binary_target:
             numeric = pd.to_numeric(series, errors="coerce")
-            if numeric.notna().all() and numeric.isin([0, 1]).all():
-                if (numeric == (1 - target_numeric)).all():
-                    findings.append(
-                        LeakageFinding(
-                            feature=column,
-                            rule="inverse_binary_target",
-                            severity=Severity.CRITICAL,
-                            risk_level=LeakageRiskLevel.CONFIRMED_DUPLICATE,
-                            explanation=(
-                                f"Column '{column}' is the exact inverse of the binary target "
-                                f"'{ctx.target_column}'."
-                            ),
-                            recommended_action=RecommendedAction.STRONGLY_CONSIDER_EXCLUDING,
-                            evidence={"match_fraction": 1.0},
-                        )
+            is_binary_feature = numeric.notna().all() and numeric.isin([0, 1]).all()
+            if is_binary_feature and (numeric == (1 - target_numeric)).all():
+                findings.append(
+                    LeakageFinding(
+                        feature=column,
+                        rule="inverse_binary_target",
+                        severity=Severity.CRITICAL,
+                        risk_level=LeakageRiskLevel.CONFIRMED_DUPLICATE,
+                        explanation=(
+                            f"Column '{column}' is the exact inverse of the binary target "
+                            f"'{ctx.target_column}'."
+                        ),
+                        recommended_action=RecommendedAction.STRONGLY_CONSIDER_EXCLUDING,
+                        evidence={"match_fraction": 1.0},
                     )
+                )
     return findings
 
 
@@ -168,7 +168,8 @@ def near_deterministic_relationship(ctx: LeakageContext) -> list[LeakageFinding]
                     explanation=(
                         f"Column '{column}' alone reproduces the target almost perfectly "
                         f"({method}={strength:.4f}). This is usually leakage, but it can be a "
-                        "legitimately dominant feature — confirm it is available at prediction time."
+                        "legitimately dominant feature — confirm it is available when the "
+                        "prediction is made."
                     ),
                     recommended_action=RecommendedAction.CONSIDER_EXCLUDING,
                     evidence={"metric": method, "value": round(strength, 6)},

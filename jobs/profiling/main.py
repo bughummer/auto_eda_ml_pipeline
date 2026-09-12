@@ -8,13 +8,12 @@ import argparse
 import logging
 import sys
 
+from jobs._common.runtime import JobError, base_parser, run_entrypoint
 from ml_engine.contracts.eda import EdaReport
 from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.io import ExperimentLayout, ObjectStore, load_dataset, write_model
 from ml_engine.leakage import LeakageConfig, analyze_leakage
 from ml_engine.profiling import ProfilingConfig, profile_dataset
-
-from jobs._common.runtime import JobError, base_parser, run_entrypoint
 
 LOGGER = logging.getLogger("ml_factory.jobs.profiling")
 
@@ -104,7 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    return run_entrypoint(build_parser(), _handler, argv, failure_uri=lambda _a, l: l.path("eda/failure.json"))
+    return run_entrypoint(
+        build_parser(),
+        _handler,
+        argv,
+        failure_uri=lambda _args, layout: layout.path("eda/failure.json"),
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - container entrypoint

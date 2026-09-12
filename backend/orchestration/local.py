@@ -9,12 +9,6 @@ import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from ml_engine.contracts.common import ExperimentStatus, ModelRunStatus
-from ml_engine.contracts.config import ExperimentConfig
-from ml_engine.contracts.experiment import ExperimentRecord
-from ml_engine.io import ExperimentLayout, ObjectStore, read_model
-from ml_engine.reporting import final_status
-
 from backend.orchestration.base import ExecutionHandle
 from backend.repositories import ExperimentRepository
 from jobs._common.runtime import JobError
@@ -22,6 +16,11 @@ from jobs.evaluation.main import run_evaluation
 from jobs.preprocessing.main import run_preparation
 from jobs.profiling.main import run_profiling
 from jobs.training.main import run_training, write_model_failure
+from ml_engine.contracts.common import ExperimentStatus, ModelRunStatus
+from ml_engine.contracts.config import ExperimentConfig
+from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.io import ExperimentLayout, ObjectStore, read_model
+from ml_engine.reporting import final_status
 
 LOGGER = logging.getLogger("ml_factory.orchestration.local")
 
@@ -46,7 +45,9 @@ class LocalOrchestrator:
 
     # --- workflow entry points -------------------------------------------
     def start_eda(self, record: ExperimentRecord) -> ExecutionHandle:
-        return self._submit(f"local-eda-{record.experiment_id}", self._run_eda, record.experiment_id)
+        return self._submit(
+            f"local-eda-{record.experiment_id}", self._run_eda, record.experiment_id
+        )
 
     def start_training(self, record: ExperimentRecord) -> ExecutionHandle:
         return self._submit(
@@ -67,7 +68,8 @@ class LocalOrchestrator:
                 self.wait_for_idle(timeout)
 
     def shutdown(self) -> None:
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        """Drop queued stages and let running ones finish, so nothing writes into a dead process."""
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     # --- stages -----------------------------------------------------------
     def _run_eda(self, experiment_id: str) -> None:
@@ -83,7 +85,7 @@ class LocalOrchestrator:
                 target_column=record.target_column,
                 file_format=record.dataset.file_format,
             )
-        except Exception as error:  # noqa: BLE001 - stage boundary
+        except Exception as error:
             self._fail(experiment_id, error, stage="profiling")
             return
         self._set(experiment_id, ExperimentStatus.EDA_COMPLETED, "eda_completed")
@@ -95,7 +97,7 @@ class LocalOrchestrator:
         self._set(experiment_id, ExperimentStatus.PREPARING, "preparation")
         try:
             run_preparation(self._store, layout, experiment_id=experiment_id)
-        except Exception as error:  # noqa: BLE001 - stage boundary
+        except Exception as error:
             self._fail(experiment_id, error, stage="preparation")
             return
 
@@ -110,7 +112,7 @@ class LocalOrchestrator:
             try:
                 run_training(self._store, layout, experiment_id=experiment_id, model_name=name)
                 statuses[name] = ModelRunStatus.COMPLETED.value
-            except Exception as error:  # noqa: BLE001 - one model must not fail the experiment
+            except Exception as error:
                 LOGGER.warning("Model %s failed: %s", name, error)
                 write_model_failure(
                     self._store,
@@ -126,7 +128,7 @@ class LocalOrchestrator:
         self._set(experiment_id, ExperimentStatus.EVALUATING, "evaluation")
         try:
             comparison = run_evaluation(self._store, layout, experiment_id=experiment_id)
-        except Exception as error:  # noqa: BLE001 - stage boundary
+        except Exception as error:
             self._fail(experiment_id, error, stage="evaluation")
             return
 

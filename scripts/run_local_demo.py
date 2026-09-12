@@ -10,19 +10,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.config import Settings  # noqa: E402
-from backend.container import build_container  # noqa: E402
-from backend.schemas.experiments import (  # noqa: E402
+from backend.config import Settings
+from backend.container import build_container
+from backend.schemas.experiments import (
     CreateExperimentRequest,
     TrainingConfigRequest,
     UpdateFeatureSelectionRequest,
 )
-from ml_engine.contracts.common import (  # noqa: E402
+from ml_engine.contracts.common import (
     ExperimentStatus,
     LeakageRiskLevel,
     RecommendedAction,
 )
-from scripts.sample_data import write_sample_datasets  # noqa: E402
+from scripts.sample_data import write_sample_datasets
 
 ROOT = Path("var/ml-factory-demo")
 

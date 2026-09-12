@@ -70,7 +70,7 @@ def load_dataset(
             frame = _read_frames(local_paths, fmt, max_rows)
         except UnsupportedDatasetFormatError:
             raise
-        except Exception as exc:  # noqa: BLE001 - surfaced as a domain error
+        except Exception as exc:
             raise DatasetLoadError(f"Failed to parse {fmt} dataset at {uri}: {exc}") from exc
 
     sampled = max_rows is not None and len(frame) >= max_rows

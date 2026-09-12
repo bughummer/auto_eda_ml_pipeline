@@ -35,7 +35,7 @@ class S3ObjectStore:
         parsed = parse_s3_uri(uri)
         try:
             response = self._client.get_object(Bucket=parsed.bucket, Key=parsed.key)
-        except Exception as exc:  # noqa: BLE001 - normalized below
+        except Exception as exc:
             if _is_missing(exc):
                 raise ObjectNotFoundError(f"No object at {uri}") from exc
             raise
@@ -61,7 +61,7 @@ class S3ObjectStore:
         parsed = parse_s3_uri(uri)
         try:
             head = self._client.head_object(Bucket=parsed.bucket, Key=parsed.key)
-        except Exception as exc:  # noqa: BLE001 - normalized below
+        except Exception as exc:
             if _is_missing(exc):
                 return None
             raise
@@ -78,7 +78,7 @@ class S3ObjectStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
             self._client.download_file(parsed.bucket, parsed.key, str(destination))
-        except Exception as exc:  # noqa: BLE001 - normalized below
+        except Exception as exc:
             if _is_missing(exc):
                 raise ObjectNotFoundError(f"No object at {uri}") from exc
             raise

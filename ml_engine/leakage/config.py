@@ -10,11 +10,16 @@ from ml_engine.contracts.common import StrictModel
 
 
 class LeakageConfig(StrictModel):
-    max_rows: int = Field(default=50_000, ge=100, description="Rows sampled for relationship checks.")
+    max_rows: int = Field(
+        default=50_000, ge=100, description="Rows sampled for relationship checks."
+    )
     max_categorical_levels: int = Field(default=200, ge=2)
 
     perfect_relationship: float = Field(
-        default=0.999, ge=0.5, le=1.0, description="Above this a single feature reproduces the target."
+        default=0.999,
+        ge=0.5,
+        le=1.0,
+        description="Above this a single feature reproduces the target.",
     )
     strong_relationship: float = Field(default=0.95, ge=0.5, le=1.0)
     regression_perfect_correlation: float = Field(default=0.999, ge=0.5, le=1.0)

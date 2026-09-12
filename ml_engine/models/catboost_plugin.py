@@ -53,9 +53,7 @@ class _CatBoostBase(ModelPlugin):
             "thread_count": -1,
         }
 
-    def fit(
-        self, estimator: Any, x: pd.DataFrame, y: pd.Series, context: TrainingContext
-    ) -> Any:
+    def fit(self, estimator: Any, x: pd.DataFrame, y: pd.Series, context: TrainingContext) -> Any:
         categorical = [c for c in context.categorical_features if c in x.columns]
         estimator.fit(x, y, cat_features=categorical or None)
         return estimator
@@ -65,7 +63,7 @@ class _CatBoostBase(ModelPlugin):
     ) -> FeatureImportance | None:
         try:
             values = np.asarray(estimator.get_feature_importance(), dtype="float64")
-        except Exception:  # noqa: BLE001 - importance is best effort, never fatal
+        except Exception:
             return None
         return normalize_importance(
             values,

@@ -98,7 +98,9 @@ class TrainingConfigRequest(StrictModel):
 
     problem_type: RequestedProblemType = RequestedProblemType.AUTO
     primary_metric: str | None = None
-    models: list[str] = Field(default_factory=list, description="Empty means every supported model.")
+    models: list[str] = Field(
+        default_factory=list, description="Empty means every supported model."
+    )
     model_parameters: dict[str, dict[str, float | int | str | bool | None]] = Field(
         default_factory=dict
     )

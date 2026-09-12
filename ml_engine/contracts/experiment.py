@@ -31,6 +31,7 @@ class ExperimentRecord(StrictModel):
     failure_code: str | None = None
     failure_message: str | None = None
     model_statuses: dict[str, str] = Field(
-        default_factory=dict, description="model name -> ModelRunStatus, mirrored for cheap polling."
+        default_factory=dict,
+        description="model name -> ModelRunStatus, mirrored for cheap polling.",
     )
     deleted: bool = False

@@ -9,11 +9,10 @@ import json
 import logging
 from typing import Any
 
-from ml_engine.contracts.experiment import ExperimentRecord
-from ml_engine.io import ExperimentLayout
-
 from backend.errors import ConfigurationError, UpstreamError
 from backend.orchestration.base import ExecutionHandle
+from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.io import ExperimentLayout
 
 LOGGER = logging.getLogger("ml_factory.orchestration.stepfunctions")
 
@@ -51,7 +50,7 @@ class StepFunctionsOrchestrator:
     def describe(self, execution_id: str) -> dict[str, str]:
         try:
             response = self._client.describe_execution(executionArn=execution_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise UpstreamError(f"Could not describe execution {execution_id}.") from exc
         return {
             "execution_id": execution_id,
@@ -91,7 +90,7 @@ class StepFunctionsOrchestrator:
             response = self._client.start_execution(
                 stateMachineArn=arn, name=name[:80], input=json.dumps(payload)
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if type(exc).__name__ == "ExecutionAlreadyExists":
                 raise UpstreamError(
                     "An execution for this experiment stage was already started."

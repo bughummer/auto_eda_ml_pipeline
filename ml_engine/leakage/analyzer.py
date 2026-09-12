@@ -38,7 +38,9 @@ def analyze_leakage(
             experiment_id=experiment_id,
             generated_at=datetime.now(UTC),
             target_column=target_column,
-            checks_skipped={r.__name__: "target column is not present in the dataset" for r in RULES},
+            checks_skipped={
+                r.__name__: "target column is not present in the dataset" for r in RULES
+            },
         )
 
     context = build_context(
@@ -61,7 +63,7 @@ def analyze_leakage(
         try:
             findings.extend(rule(context))
             executed.append(rule.__name__)
-        except Exception as exc:  # noqa: BLE001 - a broken rule must not fail an experiment
+        except Exception as exc:
             skipped[rule.__name__] = f"{type(exc).__name__}: {exc}"
 
     return LeakageReport(
@@ -131,11 +133,13 @@ def default_feature_selection(
         if profile.name == target_column:
             continue
         risk = leakage.risk_for(profile.name)
-        if risk and risk.risk_level is LeakageRiskLevel.CONFIRMED_DUPLICATE:
-            proposed_exclusions[profile.name] = risk.reasons[0]
-        elif risk and risk.recommended_action in {
-            RecommendedAction.STRONGLY_CONSIDER_EXCLUDING,
-        }:
+        if (risk and risk.risk_level is LeakageRiskLevel.CONFIRMED_DUPLICATE) or (
+            risk
+            and risk.recommended_action
+            in {
+                RecommendedAction.STRONGLY_CONSIDER_EXCLUDING,
+            }
+        ):
             proposed_exclusions[profile.name] = risk.reasons[0]
         elif profile.is_constant:
             proposed_exclusions[profile.name] = "Column is constant and carries no information."
@@ -143,8 +147,6 @@ def default_feature_selection(
             proposed_exclusions[profile.name] = "Column is entirely missing."
 
     selected = [
-        p.name
-        for p in eda.columns
-        if p.name != target_column and p.name not in proposed_exclusions
+        p.name for p in eda.columns if p.name != target_column and p.name not in proposed_exclusions
     ]
     return selected, proposed_exclusions

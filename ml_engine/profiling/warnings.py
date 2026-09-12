@@ -207,9 +207,7 @@ def column_warnings(profile: ColumnProfile, config: ProfilingConfig) -> list[Ana
     return found
 
 
-def target_warnings(
-    target: TargetAnalysis, row_count: int, config: ProfilingConfig
-) -> list[AnalysisWarning]:
+def target_warnings(target: TargetAnalysis, config: ProfilingConfig) -> list[AnalysisWarning]:
     found: list[AnalysisWarning] = []
     if not target.exists:
         found.append(

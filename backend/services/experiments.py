@@ -11,6 +11,25 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
+from backend.config import Settings
+from backend.errors import (
+    ArtifactNotReadyError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
+from backend.orchestration.base import ExperimentOrchestrator
+from backend.repositories import ExperimentRepository
+from backend.schemas.experiments import (
+    CreateExperimentRequest,
+    FeatureReviewItem,
+    FeatureReviewResponse,
+    ModelRunState,
+    TrainingConfigRequest,
+    TrainingConfigResponse,
+    TrainingStatusResponse,
+    UpdateFeatureSelectionRequest,
+)
 from ml_engine.contracts.common import (
     ClassWeighting,
     ExperimentStatus,
@@ -45,7 +64,6 @@ from ml_engine.io import (
     detect_format,
     is_s3_uri,
     parse_s3_uri,
-    read_model,
     read_model_if_exists,
     write_model,
 )
@@ -53,26 +71,6 @@ from ml_engine.io.uri import InvalidS3UriError
 from ml_engine.leakage import default_feature_selection
 from ml_engine.models import UnknownModelError, default_model_names, get_plugin, plugins_for
 from ml_engine.training.runner import environment_metadata, package_versions
-
-from backend.config import Settings
-from backend.errors import (
-    ArtifactNotReadyError,
-    ConflictError,
-    NotFoundError,
-    ValidationError,
-)
-from backend.orchestration.base import ExperimentOrchestrator
-from backend.repositories import ExperimentRepository
-from backend.schemas.experiments import (
-    CreateExperimentRequest,
-    FeatureReviewItem,
-    FeatureReviewResponse,
-    ModelRunState,
-    TrainingConfigRequest,
-    TrainingConfigResponse,
-    TrainingStatusResponse,
-    UpdateFeatureSelectionRequest,
-)
 
 LOGGER = logging.getLogger("ml_factory.services.experiments")
 
@@ -132,9 +130,13 @@ class ExperimentService:
     def get(self, experiment_id: str) -> ExperimentRecord:
         return self._repository.get(experiment_id)
 
-    def list(self, limit: int | None = None, created_by: str | None = None) -> list[ExperimentRecord]:
+    def list(
+        self, limit: int | None = None, created_by: str | None = None
+    ) -> list[ExperimentRecord]:
         return self._repository.list(
-            limit=min(limit or self._settings.experiment_list_limit, self._settings.experiment_list_limit),
+            limit=min(
+                limit or self._settings.experiment_list_limit, self._settings.experiment_list_limit
+            ),
             created_by=created_by,
         )
 
@@ -164,7 +166,9 @@ class ExperimentService:
 
     def model_metadata(self, experiment_id: str, model_name: str) -> ModelMetadata:
         layout = self._layout(experiment_id)
-        metadata = read_model_if_exists(self._store, layout.model_metadata(model_name), ModelMetadata)
+        metadata = read_model_if_exists(
+            self._store, layout.model_metadata(model_name), ModelMetadata
+        )
         if metadata is not None:
             return metadata
         failure = read_model_if_exists(self._store, layout.model_failure(model_name), ModelFailure)
@@ -272,7 +276,9 @@ class ExperimentService:
         )
         write_model(self._store, layout.selected_features, selection)
         self._repository.update(
-            experiment_id, status=ExperimentStatus.READY_FOR_TRAINING, current_stage="ready_for_training"
+            experiment_id,
+            status=ExperimentStatus.READY_FOR_TRAINING,
+            current_stage="ready_for_training",
         )
         return selection
 
@@ -429,9 +435,7 @@ class ExperimentService:
         layout = ExperimentLayout(base=record.artifact_prefix)
         return read_model_if_exists(self._store, layout.selected_features, FeatureSelection)
 
-    def _resolve_problem_type(
-        self, requested: RequestedProblemType, eda: EdaReport
-    ) -> ProblemType:
+    def _resolve_problem_type(self, requested: RequestedProblemType, eda: EdaReport) -> ProblemType:
         if requested is not RequestedProblemType.AUTO:
             return ProblemType(requested.value)
         inferred = eda.target.inferred_problem_type

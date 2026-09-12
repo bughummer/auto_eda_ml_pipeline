@@ -33,7 +33,9 @@ class DatasetReference(StrictModel):
 
 
 class SplitConfig(StrictModel):
-    strategy: str = Field(default="stratified_random", description="Registered split strategy name.")
+    strategy: str = Field(
+        default="stratified_random", description="Registered split strategy name."
+    )
     validation_fraction: float = Field(default=DEFAULT_VALIDATION_FRACTION, gt=0.0, lt=1.0)
     random_seed: int = DEFAULT_RANDOM_SEED
     stratify: bool = True

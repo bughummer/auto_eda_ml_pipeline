@@ -49,7 +49,7 @@ def _safe(
     """Run one metric. Failure is recorded as a warning, never raised."""
     try:
         value = float(compute())
-    except Exception as exc:  # noqa: BLE001 - metric isolation is the point
+    except Exception as exc:
         result.warnings.append(
             AnalysisWarning(
                 rule="metric_not_computed",
@@ -183,7 +183,7 @@ def _evaluate_classification(
             labels=[str(label) for label in labels],
             matrix=[[int(cell) for cell in row] for row in matrix],
         )
-    except Exception as exc:  # noqa: BLE001 - defensive
+    except Exception as exc:
         result.warnings.append(
             AnalysisWarning(
                 rule="confusion_matrix_not_computed",
@@ -253,9 +253,7 @@ def _evaluate_regression(y_true: pd.Series, y_pred: np.ndarray) -> MetricSet:
         _safe(
             result,
             "mape",
-            lambda: float(
-                np.mean(np.abs(errors[non_zero] / truth[non_zero])) * 100.0
-            ),
+            lambda: float(np.mean(np.abs(errors[non_zero] / truth[non_zero])) * 100.0),
         )
     if excluded:
         result.warnings.append(
@@ -277,8 +275,6 @@ def _evaluate_regression(y_true: pd.Series, y_pred: np.ndarray) -> MetricSet:
         _safe(
             result,
             "smape",
-            lambda: float(
-                np.mean(np.abs(errors[smape_mask]) / denominator[smape_mask]) * 100.0
-            ),
+            lambda: float(np.mean(np.abs(errors[smape_mask]) / denominator[smape_mask]) * 100.0),
         )
     return result

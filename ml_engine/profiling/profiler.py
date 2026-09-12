@@ -75,7 +75,7 @@ def profile_dataset(
         if profile.name == target_column:
             continue
         collected.extend(warning_rules.column_warnings(profile, config))
-    collected.extend(warning_rules.target_warnings(target, summary.row_count, config))
+    collected.extend(warning_rules.target_warnings(target, config))
 
     return EdaReport(
         experiment_id=experiment_id,
@@ -97,7 +97,7 @@ def _dataset_summary(
     source_size_bytes: int | None,
     sampled: bool,
 ) -> DatasetSummary:
-    row_count = int(len(frame))
+    row_count = len(frame)
     try:
         duplicate_count = int(frame.duplicated().sum())
         duplicates_exact = True
@@ -108,7 +108,9 @@ def _dataset_summary(
         row_count=row_count,
         column_count=int(frame.shape[1]),
         duplicate_row_count=duplicate_count,
-        duplicate_row_percentage=round(100.0 * duplicate_count / row_count, 4) if row_count else 0.0,
+        duplicate_row_percentage=round(100.0 * duplicate_count / row_count, 4)
+        if row_count
+        else 0.0,
         memory_usage_bytes=int(frame.memory_usage(deep=True).sum()),
         memory_usage_is_exact=duplicates_exact,
         file_format=file_format,
@@ -120,7 +122,7 @@ def _dataset_summary(
 
 
 def _profile_column(series: pd.Series, config: ProfilingConfig) -> ColumnProfile:
-    row_count = int(len(series))
+    row_count = len(series)
     missing_count = int(series.isna().sum())
     non_null_count = row_count - missing_count
     unique_count = int(series.dropna().nunique())
@@ -140,7 +142,9 @@ def _profile_column(series: pd.Series, config: ProfilingConfig) -> ColumnProfile
         missing_count=missing_count,
         missing_percentage=round(100.0 * missing_count / row_count, 4) if row_count else 0.0,
         unique_count=unique_count,
-        unique_percentage=round(100.0 * unique_count / non_null_count, 4) if non_null_count else 0.0,
+        unique_percentage=round(100.0 * unique_count / non_null_count, 4)
+        if non_null_count
+        else 0.0,
         is_constant=semantic_type is SemanticType.CONSTANT,
         is_high_cardinality=(
             semantic_type in _HIGH_CARDINALITY_CANDIDATES
@@ -171,7 +175,7 @@ def _analyze_target(
         return TargetAnalysis(column=target_column, exists=False, inferred_problem_type=None)
 
     series = frame[target_column]
-    row_count = int(len(series))
+    row_count = len(series)
     missing_count = int(series.isna().sum())
     problem_type, _reason = infer_problem_type(series, config)
 

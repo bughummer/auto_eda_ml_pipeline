@@ -8,9 +8,8 @@ import threading
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from ml_engine.contracts.experiment import ExperimentRecord
-
 from backend.errors import NotFoundError, UpstreamError
+from ml_engine.contracts.experiment import ExperimentRecord
 
 
 class ExperimentRepository(Protocol):
@@ -78,8 +77,10 @@ class DynamoExperimentRepository:
     def get(self, experiment_id: str) -> ExperimentRecord:
         try:
             response = self._table.get_item(Key={"experiment_id": experiment_id})
-        except Exception as exc:  # noqa: BLE001 - normalized for the API boundary
-            raise UpstreamError(f"Could not read experiment '{experiment_id}' from DynamoDB.") from exc
+        except Exception as exc:
+            raise UpstreamError(
+                f"Could not read experiment '{experiment_id}' from DynamoDB."
+            ) from exc
         item = response.get("Item")
         if not item or item.get("deleted"):
             raise NotFoundError(f"Experiment '{experiment_id}' does not exist.")
@@ -88,9 +89,11 @@ class DynamoExperimentRepository:
     def list(self, limit: int = 100, created_by: str | None = None) -> list[ExperimentRecord]:
         try:
             response = self._table.scan(Limit=max(limit * 2, limit))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise UpstreamError("Could not list experiments from DynamoDB.") from exc
-        records = [_from_item(item) for item in response.get("Items", []) if not item.get("deleted")]
+        records = [
+            _from_item(item) for item in response.get("Items", []) if not item.get("deleted")
+        ]
         if created_by:
             records = [r for r in records if r.created_by == created_by]
         records.sort(key=lambda r: r.created_at, reverse=True)
@@ -108,7 +111,7 @@ class DynamoExperimentRepository:
     def _put(self, record: ExperimentRecord) -> None:
         try:
             self._table.put_item(Item=_to_item(record))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise UpstreamError(
                 f"Could not persist experiment '{record.experiment_id}' to DynamoDB."
             ) from exc

@@ -84,9 +84,7 @@ class XGBoostClassifierPlugin(_XGBoostBase):
         # XGBoost's sklearn API only accepts integer classes; labels stay strings everywhere else.
         return LabelEncodedClassifier(xgb.XGBClassifier(**params))
 
-    def fit(
-        self, estimator: Any, x: pd.DataFrame, y: pd.Series, context: TrainingContext
-    ) -> Any:
+    def fit(self, estimator: Any, x: pd.DataFrame, y: pd.Series, context: TrainingContext) -> Any:
         """Multiclass imbalance is handled with sample weights; binary uses scale_pos_weight."""
         if (
             context.wants_class_weighting

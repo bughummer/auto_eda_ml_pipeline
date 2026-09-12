@@ -115,7 +115,7 @@ def register_error_handlers(app: FastAPI, logger) -> None:
         return JSONResponse(status_code=exc.status_code, content=envelope.model_dump())
 
     @app.exception_handler(Exception)
-    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
         request_id = getattr(request.state, "request_id", None)
         logger.exception("Unhandled error while handling %s", request.url.path)
         error = AppError(

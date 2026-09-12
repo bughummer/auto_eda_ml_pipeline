@@ -32,11 +32,23 @@ def numeric_stats(series: pd.Series) -> NumericStats:
     non_null = numeric.dropna()
     if non_null.empty:
         return NumericStats(
-            min=None, max=None, mean=None, median=None, std=None,
-            q01=None, q05=None, q25=None, q75=None, q95=None, q99=None,
-            zero_count=0, zero_percentage=0.0, negative_count=0, skewness=None,
+            min=None,
+            max=None,
+            mean=None,
+            median=None,
+            std=None,
+            q01=None,
+            q05=None,
+            q25=None,
+            q75=None,
+            q95=None,
+            q99=None,
+            zero_count=0,
+            zero_percentage=0.0,
+            negative_count=0,
+            skewness=None,
         )
-    total = int(len(numeric))
+    total = len(numeric)
     quantiles = non_null.quantile([0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
     zero_count = int((non_null == 0).sum())
     return NumericStats(
@@ -60,7 +72,7 @@ def numeric_stats(series: pd.Series) -> NumericStats:
 
 def categorical_stats(series: pd.Series, config: ProfilingConfig) -> CategoricalStats:
     non_null = series.dropna()
-    total = int(len(non_null))
+    total = len(non_null)
     if total == 0:
         return CategoricalStats(top_values=[], truncated=False)
     as_text = non_null.astype("string")

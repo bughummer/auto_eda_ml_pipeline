@@ -74,8 +74,13 @@ def uri_matches_prefix(uri: str, allowed_prefix: str) -> bool:
 
 
 def detect_format(uri: str) -> str:
-    """Infer the dataset file format from the URI suffix."""
-    lowered = uri.lower().rstrip("/")
+    """Infer the dataset file format from the URI suffix.
+
+    A trailing slash means a prefix of part files, which the platform reads as parquet.
+    """
+    if uri.endswith("/"):
+        return "parquet"
+    lowered = uri.lower()
     for suffix, fmt in (
         (".csv.gz", "csv"),
         (".csv", "csv"),
@@ -88,6 +93,4 @@ def detect_format(uri: str) -> str:
     ):
         if lowered.endswith(suffix):
             return fmt
-    if lowered.endswith("/"):
-        return "parquet"
     return "unknown"

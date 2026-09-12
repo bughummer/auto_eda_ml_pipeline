@@ -41,7 +41,9 @@ class PreprocessingMetadata(StrictModel):
     output_feature_names: list[str] = Field(default_factory=list)
     output_feature_count: int = 0
     strategy: str = Field(default="dense_numeric", description="dense_numeric | native_categorical")
-    fitted_on: str = Field(default="train", description="Learned transforms fit on the train fold only.")
+    fitted_on: str = Field(
+        default="train", description="Learned transforms fit on the train fold only."
+    )
     config_digest: str | None = None
 
 
@@ -60,7 +62,7 @@ class ModelMetadata(StrictModel):
     problem_type: ProblemType
     library: str
     library_version: str
-    hyperparameters: dict[str, float | int | str | bool | None | list[float]] = Field(
+    hyperparameters: dict[str, float | int | str | bool | list[float] | None] = Field(
         default_factory=dict
     )
     features_used: list[str] = Field(default_factory=list)

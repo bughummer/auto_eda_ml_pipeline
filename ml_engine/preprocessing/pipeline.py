@@ -86,7 +86,9 @@ class FeaturePipeline:
         transformed = self._transformer.transform(frame[self.plan.usable])
         if isinstance(transformed, pd.DataFrame):
             return transformed
-        dense = transformed.toarray() if hasattr(transformed, "toarray") else np.asarray(transformed)
+        dense = (
+            transformed.toarray() if hasattr(transformed, "toarray") else np.asarray(transformed)
+        )
         return pd.DataFrame(dense, columns=self._feature_names, index=frame.index)
 
     def fit_transform(self, frame: pd.DataFrame, y: pd.Series | None = None) -> pd.DataFrame:

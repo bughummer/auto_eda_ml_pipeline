@@ -85,7 +85,7 @@ def run_entrypoint(
         LOGGER.exception("%s failed: %s", job_name, error.message)
         _write_failure(store, layout, args, error.code, error.message, error.details, failure_uri)
         return 1
-    except Exception as error:  # noqa: BLE001 - the boundary of the process
+    except Exception as error:
         LOGGER.exception("%s failed unexpectedly", job_name)
         _write_failure(
             store,
@@ -121,5 +121,5 @@ def _write_failure(
     )
     try:
         write_model(store, uri, failure)
-    except Exception:  # noqa: BLE001 - never mask the original failure
+    except Exception:
         LOGGER.exception("Could not write the failure artifact to %s", uri)

@@ -15,7 +15,10 @@ LOGGER = logging.getLogger("ml_factory.aws")
 def proxy_definitions() -> dict[str, str]:
     """Corporate proxy settings, read from the standard environment variables."""
     proxies: dict[str, str] = {}
-    for scheme, variables in (("https", ("HTTPS_PROXY", "https_proxy")), ("http", ("HTTP_PROXY", "http_proxy"))):
+    for scheme, variables in (
+        ("https", ("HTTPS_PROXY", "https_proxy")),
+        ("http", ("HTTP_PROXY", "http_proxy")),
+    ):
         for variable in variables:
             value = os.environ.get(variable)
             if value:
@@ -53,6 +56,8 @@ def build_dynamodb_table(table_name: str, region: str) -> Any:
     resource = boto3.resource(
         "dynamodb",
         region_name=region,
-        config=Config(retries={"max_attempts": 5, "mode": "standard"}, proxies=proxy_definitions() or None),
+        config=Config(
+            retries={"max_attempts": 5, "mode": "standard"}, proxies=proxy_definitions() or None
+        ),
     )
     return resource.Table(table_name)

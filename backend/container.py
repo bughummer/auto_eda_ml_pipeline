@@ -7,16 +7,21 @@ output, nothing else.
 import logging
 from dataclasses import dataclass
 
-from ml_engine.io import LocalObjectStore, ObjectStore, S3ObjectStore
-
 from backend.config import Settings, get_settings
-from backend.orchestration import ExperimentOrchestrator, LocalOrchestrator, StepFunctionsOrchestrator
+from backend.orchestration import (
+    ExperimentOrchestrator,
+    LocalOrchestrator,
+    StepFunctionsOrchestrator,
+)
 from backend.repositories import (
     DynamoExperimentRepository,
     ExperimentRepository,
     InMemoryExperimentRepository,
 )
+from backend.services.dictionary import DataDictionaryService
 from backend.services.experiments import ExperimentService
+from backend.services.reasoning import ReasoningService
+from ml_engine.io import LocalObjectStore, ObjectStore, S3ObjectStore
 
 LOGGER = logging.getLogger("ml_factory.container")
 
@@ -28,6 +33,8 @@ class AppContainer:
     repository: ExperimentRepository
     orchestrator: ExperimentOrchestrator
     experiments: ExperimentService
+    dictionary: DataDictionaryService
+    reasoning: ReasoningService
 
     def shutdown(self) -> None:
         shutdown = getattr(self.orchestrator, "shutdown", None)
@@ -66,6 +73,13 @@ def build_container(settings: Settings | None = None) -> AppContainer:
     service = ExperimentService(
         settings=settings, repository=repository, store=store, orchestrator=orchestrator
     )
+    dictionary = DataDictionaryService(settings=settings, repository=repository, store=store)
+    reasoning = ReasoningService(
+        settings=settings,
+        repository=repository,
+        store=store,
+        client=_build_reasoning_client(settings),
+    )
     LOGGER.info("ML Factory container built in %s mode", settings.mode.value)
     return AppContainer(
         settings=settings,
@@ -73,4 +87,20 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         repository=repository,
         orchestrator=orchestrator,
         experiments=service,
+        dictionary=dictionary,
+        reasoning=reasoning,
+    )
+
+
+def _build_reasoning_client(settings: Settings):
+    """Bedrock is optional: without it the platform simply has no reasoning layer."""
+    if not settings.bedrock_enabled or not settings.bedrock_model_id:
+        return None
+    from backend.aws import build_client
+    from ml_engine.reasoning import BedrockReasoningClient
+
+    return BedrockReasoningClient(
+        build_client("bedrock-runtime", settings.aws_region),
+        model_id=settings.bedrock_model_id,
+        max_tokens=settings.bedrock_max_tokens,
     )

@@ -74,6 +74,8 @@ from ml_engine.contracts.warnings import AnalysisWarning, sort_warnings
 
 __all__ = [
     "ACTION_ORDER",
+    "DEFAULT_RANDOM_SEED",
+    "DEFAULT_VALIDATION_FRACTION",
     "LEAKAGE_RISK_ORDER",
     "SEVERITY_ORDER",
     "AnalysisWarning",
@@ -86,8 +88,6 @@ __all__ = [
     "ComparisonReport",
     "ComputeConfig",
     "ConfusionMatrix",
-    "DEFAULT_RANDOM_SEED",
-    "DEFAULT_VALIDATION_FRACTION",
     "DataDictionary",
     "DataQualityConcern",
     "DatasetReference",
@@ -116,6 +116,7 @@ __all__ = [
     "ModelMetadata",
     "ModelRunStatus",
     "ModelSpec",
+    "NumericStats",
     "PreparationReport",
     "PreprocessingConfig",
     "PreprocessingMetadata",
@@ -130,6 +131,7 @@ __all__ = [
     "SplitConfig",
     "SplitSummary",
     "StrictModel",
+    "TargetAnalysis",
     "TrainingConfig",
     "WarningCategory",
     "sort_warnings",

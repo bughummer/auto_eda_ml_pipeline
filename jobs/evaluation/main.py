@@ -8,6 +8,7 @@ import argparse
 import logging
 import sys
 
+from jobs._common.runtime import JobError, base_parser, run_entrypoint
 from ml_engine.contracts.comparison import ComparisonReport
 from ml_engine.contracts.config import ExperimentConfig
 from ml_engine.contracts.eda import EdaReport
@@ -21,8 +22,6 @@ from ml_engine.io import (
     write_model,
 )
 from ml_engine.reporting import build_comparison, build_summary, final_status
-
-from jobs._common.runtime import JobError, base_parser, run_entrypoint
 
 LOGGER = logging.getLogger("ml_factory.jobs.evaluation")
 
@@ -98,7 +97,10 @@ def run_evaluation(
     )
     write_model(store, layout.summary, summary)
     LOGGER.info(
-        "Best model: %s (%s=%s)", comparison.best_model, comparison.primary_metric, comparison.best_score
+        "Best model: %s (%s=%s)",
+        comparison.best_model,
+        comparison.primary_metric,
+        comparison.best_score,
     )
     return comparison
 
@@ -115,7 +117,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     return run_entrypoint(
-        build_parser(), _handler, argv, failure_uri=lambda _a, l: l.path("comparison/failure.json")
+        build_parser(),
+        _handler,
+        argv,
+        failure_uri=lambda _args, layout: layout.path("comparison/failure.json"),
     )
 
 

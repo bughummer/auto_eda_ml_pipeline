@@ -9,6 +9,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 
+from jobs._common.runtime import JobError, base_parser, run_entrypoint
 from ml_engine.contracts.config import ExperimentConfig
 from ml_engine.contracts.model import ModelArtifacts, ModelFailure, ModelMetadata
 from ml_engine.io import (
@@ -21,8 +22,6 @@ from ml_engine.io import (
 )
 from ml_engine.models import ModelNotAvailableError, UnknownModelError, get_plugin
 from ml_engine.training import TrainingError, train_model
-
-from jobs._common.runtime import JobError, base_parser, run_entrypoint
 
 LOGGER = logging.getLogger("ml_factory.jobs.training")
 
@@ -89,9 +88,7 @@ def run_training(
         preprocessor_uri=layout.preprocessor(plugin.preprocessing_strategy),
     )
     write_model(store, layout.model_metadata(model_name), metadata)
-    LOGGER.info(
-        "%s completed: %s=%s", model_name, metadata.primary_metric, metadata.primary_score
-    )
+    LOGGER.info("%s completed: %s=%s", model_name, metadata.primary_metric, metadata.primary_score)
     return metadata
 
 

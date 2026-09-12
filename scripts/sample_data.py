@@ -32,7 +32,8 @@ def build_churn_dataset(rows: int = 2000, seed: int = 7) -> pd.DataFrame:
     frame = pd.DataFrame(
         {
             "customer_id": [f"CUST-{i:06d}" for i in range(rows)],
-            "signup_date": pd.to_datetime("2019-01-01") + pd.to_timedelta(rng.integers(0, 1500, rows), unit="D"),
+            "signup_date": pd.to_datetime("2019-01-01")
+            + pd.to_timedelta(rng.integers(0, 1500, rows), unit="D"),
             "tenure_months": tenure,
             "monthly_charges": monthly_charges,
             "total_charges": np.round(monthly_charges * tenure * rng.uniform(0.9, 1.1, rows), 2),
@@ -52,7 +53,9 @@ def build_churn_dataset(rows: int = 2000, seed: int = 7) -> pd.DataFrame:
                 rows,
             ),
             # Deliberate problems for the platform to find:
-            "account_closed_reason": np.where(churned == 1, rng.choice(["price", "service"], rows), None),
+            "account_closed_reason": np.where(
+                churned == 1, rng.choice(["price", "service"], rows), None
+            ),
             "churn_label_copy": churned,
             "churned": churned,
         }
@@ -70,9 +73,11 @@ def build_price_dataset(rows: int = 1500, seed: int = 11) -> pd.DataFrame:
     rooms = np.maximum(1, (area / 30 + rng.normal(0, 0.6, rows)).round())
     age = rng.integers(0, 90, rows)
     district = rng.choice(["centre", "north", "south", "harbour"], rows)
-    premium = pd.Series(district).map(
-        {"centre": 1800, "north": 900, "south": 950, "harbour": 1500}
-    ).to_numpy()
+    premium = (
+        pd.Series(district)
+        .map({"centre": 1800, "north": 900, "south": 950, "harbour": 1500})
+        .to_numpy()
+    )
     price = 1200 * area + 8000 * rooms - 900 * age + premium * 10 + rng.normal(0, 25_000, rows)
     return pd.DataFrame(
         {
