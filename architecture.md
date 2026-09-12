@@ -84,6 +84,7 @@ ml_engine/        deterministic ML core. Pure Python. NO aws, NO fastapi imports
   splitting/      train/validation split strategies
   models/         model plugins (base + registry + implementations)
   evaluation/     metric computation per problem type
+  training/       single-model training use case (plugin + fitted preprocessing + metrics)
   reporting/      comparison + experiment summary assembly
   dictionary/     data dictionary parsing & normalization (JSON/CSV/XLSX)
   reasoning/      Bedrock prompt construction + strict response validation (client injected)
@@ -118,8 +119,12 @@ backend  → ml_engine (contracts + local runner only; never model training inli
 ml_engine→ (pandas, numpy, sklearn, model libs) only
 ```
 
-`ml_engine` must never import `boto3`, `fastapi`, or anything from `backend`/`jobs`.
-This is enforced by a test (`tests/test_architecture_boundaries.py`).
+`ml_engine` must never import `fastapi`, `backend` or `jobs`. It must not import `boto3`
+either, with exactly one documented exception: `ml_engine/io/s3.py`, which imports the SDK
+lazily so that the control plane and the jobs share one S3 adapter instead of growing two
+(AD-8). The Bedrock adapter needs no exception — its client is injected. All of this is
+enforced by `tests/test_architecture_boundaries.py`, as is the rule that artifact paths are
+defined only in `ml_engine/io/layout.py`.
 
 ## 5. Experiment lifecycle and state model
 
@@ -198,7 +203,7 @@ s3://<artifact-bucket>/ml-factory/experiments/<experiment_id>/
   config/selected_features.json         FeatureSelection
   config/data_dictionary.json           DataDictionary (optional)
   validation/validation.json            PreparationReport (split sizes, dropped cols, warnings)
-  preprocessing/preprocessor.joblib     fitted sklearn pipeline
+  preprocessing/preprocessor_<strategy>.joblib   fitted sklearn pipeline, one per strategy
   preprocessing/preprocessing.json      PreprocessingMetadata (columns per transformer, versions)
   datasets/train.parquet                materialized training fold (transformed-ready raw slice)
   datasets/validation.parquet           materialized validation fold
@@ -240,8 +245,7 @@ StartAt: MarkPreparing
   → TrainModels (Map over config.models, MaxConcurrency configurable,
                  per-branch Catch → writes models/<name>/failure.json, branch result = FAILED)
   → MarkEvaluating
-  → RunEvaluation (Processing .sync)
-  → MarkCompleted (reads comparison.json summary passed from the evaluation job)
+  → RunEvaluation (Processing .sync; the job writes the terminal state, see AD-9)
 Catch (any) → MarkFailed
 ```
 
@@ -321,6 +325,9 @@ Single error envelope for the whole API:
 | AD-5 | Preprocessing is fitted in the preparation job and persisted, not refitted per model | guarantees every model sees identical features and prevents fit-on-validation leakage |
 | AD-6 | One SageMaker Training job per model via a `Map` state | isolates failures, parallelizes, and keeps the state machine independent of the model catalogue |
 | AD-7 | Optional model libraries register conditionally | a missing CatBoost wheel degrades the catalogue, it does not break the platform |
+| AD-8 | The S3 adapter lives inside `ml_engine/io` with a lazy `boto3` import | the control plane and the jobs share one implementation instead of duplicating it; `import ml_engine` still works without the AWS SDK. The Bedrock client is injected, so it needs no such exception |
+| AD-9 | The evaluation job writes the terminal experiment state; Step Functions writes every other transition | whether a run is `COMPLETED` or `COMPLETED_WITH_WARNINGS` depends on the comparison the job computes. Re-deriving that in the state machine would duplicate the judgement; `ml_engine.reporting.final_status` stays the single place it is made |
+| AD-10 | The preparation job fits one pipeline per required preprocessing strategy (dense one-hot, native categorical) rather than one overall | CatBoost consumes categories natively while linear models need a dense matrix. Both are still fitted on the training fold only, so the guarantee in AD-5 holds for every model |
 
 ## 13. Local development
 

@@ -1,0 +1,61 @@
+{
+  "Comment": "MlFactoryBackendRole - the FastAPI control plane. It starts workflows, reads and writes experiment records, and reads artifacts. It cannot create SageMaker jobs and cannot write outside the ML Factory prefix.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartAndInspectWorkflows",
+      "Effect": "Allow",
+      "Action": ["states:StartExecution", "states:DescribeExecution", "states:ListExecutions"],
+      "Resource": [
+        "arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:ml-factory-*",
+        "arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:execution:ml-factory-*:*"
+      ]
+    },
+    {
+      "Sid": "ExperimentRecords",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
+      "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${EXPERIMENTS_TABLE}"
+    },
+    {
+      "Sid": "ReadAndWriteExperimentArtifacts",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::${ARTIFACT_BUCKET}/ml-factory/experiments/*"
+    },
+    {
+      "Sid": "ListArtifactBucketPrefix",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::${ARTIFACT_BUCKET}",
+      "Condition": { "StringLike": { "s3:prefix": ["ml-factory/experiments/*"] } }
+    },
+    {
+      "Sid": "ValidateApprovedDatasets",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::${APPROVED_DATA_BUCKET}",
+        "arn:aws:s3:::${APPROVED_DATA_BUCKET}/${APPROVED_DATA_PREFIX}/*"
+      ]
+    },
+    {
+      "Sid": "ArtifactEncryption",
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+      "Resource": "arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT_ID}:key/${KMS_KEY_ID}"
+    },
+    {
+      "Sid": "SemanticReasoningOnApprovedModelsOnly",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel"],
+      "Resource": "arn:aws:bedrock:${AWS_REGION}::foundation-model/${BEDROCK_MODEL_ID}"
+    }
+  ]
+}

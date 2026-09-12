@@ -8,6 +8,7 @@ import argparse
 import logging
 import sys
 
+from jobs._common.experiment_state import ExperimentStateWriter, build_state_writer
 from jobs._common.runtime import JobError, base_parser, run_entrypoint
 from ml_engine.contracts.comparison import ComparisonReport
 from ml_engine.contracts.config import ExperimentConfig
@@ -65,6 +66,7 @@ def run_evaluation(
     layout: ExperimentLayout,
     *,
     experiment_id: str,
+    state_writer: ExperimentStateWriter | None = None,
 ) -> ComparisonReport:
     """Build ``comparison.json`` and ``experiment_summary.json``."""
     try:
@@ -96,6 +98,10 @@ def run_evaluation(
         models=successes,
     )
     write_model(store, layout.summary, summary)
+
+    if state_writer is not None:
+        state_writer.record_completion(experiment_id, comparison)
+
     LOGGER.info(
         "Best model: %s (%s=%s)",
         comparison.best_model,
@@ -106,12 +112,23 @@ def run_evaluation(
 
 
 def _handler(args: argparse.Namespace, store: ObjectStore, layout: ExperimentLayout) -> None:
-    run_evaluation(store, layout, experiment_id=args.experiment_id)
+    run_evaluation(
+        store,
+        layout,
+        experiment_id=args.experiment_id,
+        state_writer=build_state_writer(args.experiments_table, args.region),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = base_parser("ML Factory evaluation job (comparison and experiment summary)")
     parser.prog = "evaluation-job"
+    parser.add_argument(
+        "--experiments-table",
+        default=None,
+        help="DynamoDB table holding experiment records. Omit to skip the state update.",
+    )
+    parser.add_argument("--region", default=None)
     return parser
 
 

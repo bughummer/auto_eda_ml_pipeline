@@ -134,8 +134,14 @@ end to end (UI → API → orchestration → job → artifact → UI) and is tes
 
 ```
 make install      # python venv + npm install
-make lint         # ruff
-make test         # pytest (unit + integration incl. full local end-to-end experiment)
-make build-front  # tsc + vite build
-make demo         # generate a sample dataset and run a complete local experiment
+make lint         # ruff: clean
+make test         # pytest: 312 tests, all green
+make build-front  # tsc --noEmit + vite build: clean
+make demo         # a complete local experiment, end to end, without AWS
 ```
+
+The suite covers the deterministic engine unit by unit, the job entrypoints (including the
+rule that failures become artifacts rather than stack traces), the control plane's validation
+and state transitions, the documented architecture boundaries, and a full local experiment
+from creation to comparison. The frontend was additionally verified by driving a real browser
+through create → EDA → feature review → training → comparison against the running API.

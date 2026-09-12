@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ML Factory - artifact storage, experiment records, IAM boundaries and the two Step Functions
+  workflows. Deliberately contains no always-on compute: every ML workload is an ephemeral
+  SageMaker job started by a workflow.
+
+Parameters:
+  ArtifactBucketName:
+    Type: String
+    Description: Bucket that stores experiment artifacts (created by this template).
+  ApprovedDataBucketName:
+    Type: String
+    Description: Existing bucket holding approved datasets. Read-only for the platform.
+  ApprovedDataPrefix:
+    Type: String
+    Default: curated
+    Description: Only this prefix of the approved bucket may be used as a dataset source.
+  JobImageUri:
+    Type: String
+    Description: ECR image URI built from infrastructure/docker/Dockerfile.
+  DefinitionsBucket:
+    Type: String
+    Description: Bucket holding the uploaded Step Functions definitions.
+  EdaDefinitionKey:
+    Type: String
+    Default: ml-factory/stepfunctions/eda_state_machine.asl.json
+  TrainingDefinitionKey:
+    Type: String
+    Default: ml-factory/stepfunctions/training_state_machine.asl.json
+  ProcessingInstanceType:
+    Type: String
+    Default: ml.m5.large
+  TrainingInstanceType:
+    Type: String
+    Default: ml.m5.large
+  MaxParallelTrainingJobs:
+    Type: Number
+    Default: 4
+  MaxRuntimeSeconds:
+    Type: Number
+    Default: 7200
+
+Resources:
+  ArtifactKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: ML Factory artifact and experiment-record encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountRoot
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+
+  ArtifactKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/ml-factory
+      TargetKeyId: !Ref ArtifactKey
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref ArtifactBucketName
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ArtifactKey
+            BucketKeyEnabled: true
+
+  ExperimentsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: ml-factory-experiments
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: experiment_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: experiment_id, KeyType: HASH }
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref ArtifactKey
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  JobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MlFactoryJobRole
+      Description: Assumed by the ephemeral SageMaker containers.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: sagemaker.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MlFactoryJobPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion']
+                Resource: !Sub 'arn:aws:s3:::${ApprovedDataBucketName}/${ApprovedDataPrefix}/*'
+              - Effect: Allow
+                Action: ['s3:ListBucket']
+                Resource: !Sub 'arn:aws:s3:::${ApprovedDataBucketName}'
+                Condition:
+                  StringLike: { 's3:prefix': [!Sub '${ApprovedDataPrefix}/*'] }
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject']
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/ml-factory/experiments/*'
+              - Effect: Allow
+                Action: ['s3:ListBucket']
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+              - Effect: Allow
+                Action: ['dynamodb:UpdateItem']
+                Resource: !GetAtt ExperimentsTable.Arn
+              - Effect: Allow
+                Action: ['kms:Decrypt', 'kms:GenerateDataKey']
+                Resource: !GetAtt ArtifactKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: '*'
+
+  WorkflowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MlFactoryWorkflowRole
+      Description: Assumed by Step Functions. Creates ephemeral jobs; holds no data access.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: states.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MlFactoryWorkflowPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:CreateProcessingJob'
+                  - 'sagemaker:DescribeProcessingJob'
+                  - 'sagemaker:StopProcessingJob'
+                  - 'sagemaker:CreateTrainingJob'
+                  - 'sagemaker:DescribeTrainingJob'
+                  - 'sagemaker:StopTrainingJob'
+                  - 'sagemaker:AddTags'
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:processing-job/mlf-*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:training-job/mlf-*'
+              - Effect: Allow
+                Action: ['events:PutTargets', 'events:PutRule', 'events:DescribeRule']
+                Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForSageMaker*Rule'
+              - Effect: Allow
+                Action: ['iam:PassRole']
+                Resource: !GetAtt JobRole.Arn
+                Condition:
+                  StringEquals: { 'iam:PassedToService': sagemaker.amazonaws.com }
+              - Effect: Allow
+                Action: ['dynamodb:UpdateItem']
+                Resource: !GetAtt ExperimentsTable.Arn
+
+  BackendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MlFactoryBackendRole
+      Description: >
+        Assumed by the FastAPI control plane on the corporate server. It can start workflows
+        and read artifacts, but cannot create SageMaker jobs itself.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MlFactoryBackendPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['states:StartExecution', 'states:DescribeExecution', 'states:ListExecutions']
+                Resource:
+                  - !Ref EdaStateMachine
+                  - !Ref TrainingStateMachine
+                  - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:ml-factory-*:*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt ExperimentsTable.Arn
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject']
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/ml-factory/experiments/*'
+              - Effect: Allow
+                Action: ['s3:ListBucket']
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}'
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:ListBucket']
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ApprovedDataBucketName}'
+                  - !Sub 'arn:aws:s3:::${ApprovedDataBucketName}/${ApprovedDataPrefix}/*'
+              - Effect: Allow
+                Action: ['kms:Decrypt', 'kms:GenerateDataKey']
+                Resource: !GetAtt ArtifactKey.Arn
+
+  WorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/vendedlogs/states/ml-factory
+      RetentionInDays: 90
+
+  EdaStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: ml-factory-eda
+      RoleArn: !GetAtt WorkflowRole.Arn
+      DefinitionS3Location:
+        Bucket: !Ref DefinitionsBucket
+        Key: !Ref EdaDefinitionKey
+      DefinitionSubstitutions:
+        JobRoleArn: !GetAtt JobRole.Arn
+        JobImageUri: !Ref JobImageUri
+        ProcessingInstanceType: !Ref ProcessingInstanceType
+        ProcessingInstanceCount: '1'
+        ProcessingVolumeSizeGb: '30'
+        MaxRuntimeSeconds: !Ref MaxRuntimeSeconds
+        KmsKeyId: !GetAtt ArtifactKey.Arn
+      LoggingConfiguration:
+        Level: ERROR
+        IncludeExecutionData: false
+        Destinations:
+          - CloudWatchLogsLogGroup: { LogGroupArn: !GetAtt WorkflowLogGroup.Arn }
+
+  TrainingStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: ml-factory-training
+      RoleArn: !GetAtt WorkflowRole.Arn
+      DefinitionS3Location:
+        Bucket: !Ref DefinitionsBucket
+        Key: !Ref TrainingDefinitionKey
+      DefinitionSubstitutions:
+        JobRoleArn: !GetAtt JobRole.Arn
+        JobImageUri: !Ref JobImageUri
+        ProcessingInstanceType: !Ref ProcessingInstanceType
+        ProcessingInstanceCount: '1'
+        ProcessingVolumeSizeGb: '30'
+        TrainingInstanceType: !Ref TrainingInstanceType
+        TrainingInstanceCount: '1'
+        TrainingVolumeSizeGb: '30'
+        MaxParallelTrainingJobs: !Ref MaxParallelTrainingJobs
+        MaxRuntimeSeconds: !Ref MaxRuntimeSeconds
+        KmsKeyId: !GetAtt ArtifactKey.Arn
+        AwsRegion: !Ref 'AWS::Region'
+      LoggingConfiguration:
+        Level: ERROR
+        IncludeExecutionData: false
+        Destinations:
+          - CloudWatchLogsLogGroup: { LogGroupArn: !GetAtt WorkflowLogGroup.Arn }
+
+Outputs:
+  ArtifactBucketUri:
+    Description: Value for ML_FACTORY_ARTIFACT_BUCKET
+    Value: !Sub 's3://${ArtifactBucketName}'
+  ExperimentsTableName:
+    Description: Value for ML_FACTORY_EXPERIMENTS_TABLE
+    Value: !Ref ExperimentsTable
+  EdaStateMachineArn:
+    Description: Value for ML_FACTORY_EDA_STATE_MACHINE_ARN
+    Value: !Ref EdaStateMachine
+  TrainingStateMachineArn:
+    Description: Value for ML_FACTORY_TRAINING_STATE_MACHINE_ARN
+    Value: !Ref TrainingStateMachine
+  BackendRoleArn:
+    Description: Role the corporate server assumes to run the control plane
+    Value: !GetAtt BackendRole.Arn
+  KmsKeyId:
+    Description: Value for ML_FACTORY_KMS_KEY_ID
+    Value: !Ref ArtifactKey

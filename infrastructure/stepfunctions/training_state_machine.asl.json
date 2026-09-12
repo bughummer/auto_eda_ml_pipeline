@@ -1,0 +1,213 @@
+{
+  "Comment": "ML Factory - training stage. Prepares the data once, trains every configured model in parallel and isolated, then evaluates. The Map state iterates the model list from the execution input, so adding a model plugin needs no change here.",
+  "StartAt": "MarkPreparing",
+  "States": {
+    "MarkPreparing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName.$": "$.experiments_table",
+        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
+        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
+        "ExpressionAttributeNames": { "#status": "status" },
+        "ExpressionAttributeValues": {
+          ":status": { "S": "PREPARING" },
+          ":stage": { "S": "preparation" },
+          ":now": { "S.$": "$$.State.EnteredTime" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "RunPreparation"
+    },
+    "RunPreparation": {
+      "Comment": "Validation, splitting and preprocessing fit. The only stage that fits learned transforms, and it fits them on the training fold alone.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "States.Format('mlf-prep-{}', $.experiment_id)",
+        "RoleArn": "${JobRoleArn}",
+        "AppSpecification": {
+          "ImageUri": "${JobImageUri}",
+          "ContainerEntrypoint": ["python", "-m", "jobs.preprocessing.main"],
+          "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix)"
+        },
+        "ProcessingResources": {
+          "ClusterConfig": {
+            "InstanceCount": ${ProcessingInstanceCount},
+            "InstanceType": "${ProcessingInstanceType}",
+            "VolumeSizeInGB": ${ProcessingVolumeSizeGb},
+            "VolumeKmsKeyId": "${KmsKeyId}"
+          }
+        },
+        "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} }
+      },
+      "ResultPath": "$.preparation_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["SageMaker.ResourceLimitExceededException"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }
+      ],
+      "Next": "MarkTraining"
+    },
+    "MarkTraining": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName.$": "$.experiments_table",
+        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
+        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
+        "ExpressionAttributeNames": { "#status": "status" },
+        "ExpressionAttributeValues": {
+          ":status": { "S": "TRAINING" },
+          ":stage": { "S": "training" },
+          ":now": { "S.$": "$$.State.EnteredTime" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "TrainModels"
+    },
+    "TrainModels": {
+      "Comment": "One training job per model. A per-branch Catch keeps a single model failure from failing the experiment; the evaluation stage reads each model's outcome from its artifacts.",
+      "Type": "Map",
+      "ItemsPath": "$.models",
+      "MaxConcurrency": ${MaxParallelTrainingJobs},
+      "Parameters": {
+        "model_name.$": "$$.Map.Item.Value",
+        "experiment_id.$": "$.experiment_id",
+        "output_s3_prefix.$": "$.output_s3_prefix"
+      },
+      "Iterator": {
+        "StartAt": "TrainOneModel",
+        "States": {
+          "TrainOneModel": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+            "Parameters": {
+              "TrainingJobName.$": "States.Format('mlf-train-{}-{}', $.experiment_id, $.model_name)",
+              "RoleArn": "${JobRoleArn}",
+              "AlgorithmSpecification": {
+                "TrainingImage": "${JobImageUri}",
+                "TrainingInputMode": "File"
+              },
+              "HyperParameters": {
+                "experiment-id.$": "$.experiment_id",
+                "artifact-base.$": "$.output_s3_prefix",
+                "model-name.$": "$.model_name"
+              },
+              "OutputDataConfig": {
+                "S3OutputPath.$": "States.Format('{}/training-jobs', $.output_s3_prefix)",
+                "KmsKeyId": "${KmsKeyId}"
+              },
+              "ResourceConfig": {
+                "InstanceCount": ${TrainingInstanceCount},
+                "InstanceType": "${TrainingInstanceType}",
+                "VolumeSizeInGB": ${TrainingVolumeSizeGb},
+                "VolumeKmsKeyId": "${KmsKeyId}"
+              },
+              "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} },
+              "EnableInterContainerTrafficEncryption": true
+            },
+            "ResultPath": "$.training_result",
+            "Retry": [
+              {
+                "ErrorEquals": ["SageMaker.ResourceLimitExceededException"],
+                "IntervalSeconds": 60,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Catch": [
+              { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "ModelFailed" }
+            ],
+            "End": true
+          },
+          "ModelFailed": {
+            "Comment": "The training job already wrote models/<name>/failure.json; this branch simply ends successfully so the other models continue.",
+            "Type": "Pass",
+            "Parameters": {
+              "model_name.$": "$.model_name",
+              "status": "FAILED"
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.training_results",
+      "Next": "MarkEvaluating"
+    },
+    "MarkEvaluating": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName.$": "$.experiments_table",
+        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
+        "UpdateExpression": "SET #status = :status, current_stage = :stage, updated_at = :now",
+        "ExpressionAttributeNames": { "#status": "status" },
+        "ExpressionAttributeValues": {
+          ":status": { "S": "EVALUATING" },
+          ":stage": { "S": "evaluation" },
+          ":now": { "S.$": "$$.State.EnteredTime" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "RunEvaluation"
+    },
+    "RunEvaluation": {
+      "Comment": "Builds comparison.json and experiment_summary.json, and writes the terminal experiment state (COMPLETED or COMPLETED_WITH_WARNINGS) because it is the component that computes it.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "States.Format('mlf-eval-{}', $.experiment_id)",
+        "RoleArn": "${JobRoleArn}",
+        "AppSpecification": {
+          "ImageUri": "${JobImageUri}",
+          "ContainerEntrypoint": ["python", "-m", "jobs.evaluation.main"],
+          "ContainerArguments.$": "States.Array('--experiment-id', $.experiment_id, '--artifact-base', $.output_s3_prefix, '--experiments-table', $.experiments_table, '--region', '${AwsRegion}')"
+        },
+        "ProcessingResources": {
+          "ClusterConfig": {
+            "InstanceCount": ${ProcessingInstanceCount},
+            "InstanceType": "${ProcessingInstanceType}",
+            "VolumeSizeInGB": ${ProcessingVolumeSizeGb},
+            "VolumeKmsKeyId": "${KmsKeyId}"
+          }
+        },
+        "StoppingCondition": { "MaxRuntimeInSeconds": ${MaxRuntimeSeconds} }
+      },
+      "ResultPath": "$.evaluation_result",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }
+      ],
+      "End": true
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName.$": "$.experiments_table",
+        "Key": { "experiment_id": { "S.$": "$.experiment_id" } },
+        "UpdateExpression": "SET #status = :status, failure_code = :code, failure_message = :message, updated_at = :now",
+        "ExpressionAttributeNames": { "#status": "status" },
+        "ExpressionAttributeValues": {
+          ":status": { "S": "FAILED" },
+          ":code": { "S": "TRAINING_WORKFLOW_FAILED" },
+          ":message": { "S.$": "States.Format('The experiment stopped before producing a comparison: {}', $.error.Cause)" },
+          ":now": { "S.$": "$$.State.EnteredTime" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "TrainingFailed"
+    },
+    "TrainingFailed": {
+      "Type": "Fail",
+      "Error": "TrainingWorkflowFailed",
+      "Cause": "A stage that the experiment cannot continue without failed. The experiment record carries the user-facing reason."
+    }
+  }
+}

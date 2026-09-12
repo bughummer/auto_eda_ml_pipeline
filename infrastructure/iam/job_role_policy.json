@@ -1,0 +1,63 @@
+{
+  "Comment": "MlFactoryJobRole - assumed by the ephemeral SageMaker containers. It reads approved datasets, reads and writes one experiment prefix, records the terminal experiment state, and writes logs. It cannot start further jobs.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadApprovedDatasetsOnly",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:GetObjectVersion"],
+      "Resource": "arn:aws:s3:::${APPROVED_DATA_BUCKET}/${APPROVED_DATA_PREFIX}/*"
+    },
+    {
+      "Sid": "ListApprovedDatasets",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::${APPROVED_DATA_BUCKET}",
+      "Condition": { "StringLike": { "s3:prefix": ["${APPROVED_DATA_PREFIX}/*"] } }
+    },
+    {
+      "Sid": "WriteExperimentArtifacts",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::${ARTIFACT_BUCKET}",
+        "arn:aws:s3:::${ARTIFACT_BUCKET}/ml-factory/experiments/*"
+      ]
+    },
+    {
+      "Sid": "RecordTerminalExperimentState",
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${EXPERIMENTS_TABLE}"
+    },
+    {
+      "Sid": "ArtifactEncryption",
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+      "Resource": "arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT_ID}:key/${KMS_KEY_ID}"
+    },
+    {
+      "Sid": "JobLogsAndMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PullTheJobImage",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

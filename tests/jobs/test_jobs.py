@@ -237,3 +237,39 @@ def _prepare(store, layout, dataset_csv, models: list[str]) -> PreparationReport
 @pytest.fixture(autouse=True)
 def _quiet_logs(caplog):
     caplog.set_level("WARNING")
+
+
+def test_evaluation_records_the_terminal_state_when_a_table_is_configured(
+    store, layout, dataset_csv
+):
+    """The evaluation job owns the terminal status because it is what computes it."""
+    from jobs._common.experiment_state import DynamoExperimentStateWriter
+
+    class FakeTable:
+        def __init__(self):
+            self.calls = []
+
+        def update_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakeTable()
+    _prepare(store, layout, dataset_csv, ["logistic_regression"])
+    run_training(store, layout, experiment_id="exp-test", model_name="logistic_regression")
+    run_evaluation(
+        store,
+        layout,
+        experiment_id="exp-test",
+        state_writer=DynamoExperimentStateWriter("table", "eu-central-1", table=table),
+    )
+    values = table.calls[0]["ExpressionAttributeValues"]
+    assert values[":status"] in {"COMPLETED", "COMPLETED_WITH_WARNINGS"}
+    assert values[":best_model"] == "logistic_regression"
+
+
+def test_evaluation_skips_the_state_update_without_a_table(store, layout, dataset_csv):
+    from jobs._common.experiment_state import build_state_writer
+
+    assert build_state_writer(None, "eu-central-1") is None
+    _prepare(store, layout, dataset_csv, ["logistic_regression"])
+    run_training(store, layout, experiment_id="exp-test", model_name="logistic_regression")
+    assert run_evaluation(store, layout, experiment_id="exp-test").best_model is not None

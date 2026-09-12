@@ -1,0 +1,57 @@
+{
+  "Comment": "MlFactoryWorkflowRole - assumed by Step Functions. It creates and inspects the ephemeral SageMaker jobs, passes the job role to them, and records stage transitions. It has no direct access to data.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RunEphemeralJobs",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateProcessingJob",
+        "sagemaker:DescribeProcessingJob",
+        "sagemaker:StopProcessingJob",
+        "sagemaker:CreateTrainingJob",
+        "sagemaker:DescribeTrainingJob",
+        "sagemaker:StopTrainingJob",
+        "sagemaker:AddTags"
+      ],
+      "Resource": [
+        "arn:aws:sagemaker:${AWS_REGION}:${AWS_ACCOUNT_ID}:processing-job/mlf-*",
+        "arn:aws:sagemaker:${AWS_REGION}:${AWS_ACCOUNT_ID}:training-job/mlf-*"
+      ]
+    },
+    {
+      "Sid": "SynchronousJobIntegration",
+      "Effect": "Allow",
+      "Action": ["events:PutTargets", "events:PutRule", "events:DescribeRule"],
+      "Resource": "arn:aws:events:${AWS_REGION}:${AWS_ACCOUNT_ID}:rule/StepFunctionsGetEventsForSageMaker*Rule"
+    },
+    {
+      "Sid": "PassOnlyTheJobRole",
+      "Effect": "Allow",
+      "Action": ["iam:PassRole"],
+      "Resource": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/MlFactoryJobRole",
+      "Condition": { "StringEquals": { "iam:PassedToService": "sagemaker.amazonaws.com" } }
+    },
+    {
+      "Sid": "RecordStageTransitions",
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${EXPERIMENTS_TABLE}"
+    },
+    {
+      "Sid": "WorkflowLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogDelivery",
+        "logs:GetLogDelivery",
+        "logs:UpdateLogDelivery",
+        "logs:DeleteLogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy",
+        "logs:DescribeResourcePolicies",
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

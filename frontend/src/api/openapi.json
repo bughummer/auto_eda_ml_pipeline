@@ -1,0 +1,4738 @@
+{
+  "components": {
+    "schemas": {
+      "AnalysisWarning": {
+        "additionalProperties": false,
+        "description": "A deterministic finding. Never an instruction \u2014 always a recommendation.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/WarningCategory"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column the finding refers to.",
+            "title": "Column"
+          },
+          "details": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "description": "Human-readable explanation of what was observed.",
+            "title": "Message",
+            "type": "string"
+          },
+          "recommended_action": {
+            "$ref": "#/components/schemas/RecommendedAction",
+            "default": "review"
+          },
+          "rule": {
+            "description": "Stable rule identifier, e.g. 'high_missingness'.",
+            "title": "Rule",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          }
+        },
+        "required": [
+          "rule",
+          "category",
+          "severity",
+          "message"
+        ],
+        "title": "AnalysisWarning",
+        "type": "object"
+      },
+      "Body_upload_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JSON, CSV or XLSX column documentation",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_post",
+        "type": "object"
+      },
+      "CategoricalStats": {
+        "additionalProperties": false,
+        "properties": {
+          "max_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Length"
+          },
+          "mean_length": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Length"
+          },
+          "top_values": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFrequency"
+            },
+            "title": "Top Values",
+            "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True when more distinct values exist than were returned.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "top_values"
+        ],
+        "title": "CategoricalStats",
+        "type": "object"
+      },
+      "CategoryFrequency": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count",
+          "percentage"
+        ],
+        "title": "CategoryFrequency",
+        "type": "object"
+      },
+      "ClassDistributionEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "count",
+          "percentage"
+        ],
+        "title": "ClassDistributionEntry",
+        "type": "object"
+      },
+      "ClassWeighting": {
+        "enum": [
+          "auto",
+          "none"
+        ],
+        "title": "ClassWeighting",
+        "type": "string"
+      },
+      "ColumnDocumentation": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at_prediction_time": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available At Prediction Time"
+          },
+          "business_definition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Definition"
+          },
+          "collection_timing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the value is produced relative to the predicted event.",
+            "title": "Collection Timing"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact"
+          },
+          "extra": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Unmapped source columns, preserved verbatim.",
+            "title": "Extra",
+            "type": "object"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "source_system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source System"
+          },
+          "update_frequency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update Frequency"
+          }
+        },
+        "required": [
+          "column"
+        ],
+        "title": "ColumnDocumentation",
+        "type": "object"
+      },
+      "ColumnProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "categorical": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoricalStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "datetime_stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatetimeStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dtype": {
+            "title": "Dtype",
+            "type": "string"
+          },
+          "is_constant": {
+            "title": "Is Constant",
+            "type": "boolean"
+          },
+          "is_high_cardinality": {
+            "title": "Is High Cardinality",
+            "type": "boolean"
+          },
+          "is_likely_id": {
+            "title": "Is Likely Id",
+            "type": "boolean"
+          },
+          "is_text_like": {
+            "default": false,
+            "title": "Is Text Like",
+            "type": "boolean"
+          },
+          "missing_count": {
+            "title": "Missing Count",
+            "type": "integer"
+          },
+          "missing_percentage": {
+            "title": "Missing Percentage",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "numeric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sample_values": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sample Values",
+            "type": "array"
+          },
+          "semantic_type": {
+            "$ref": "#/components/schemas/SemanticType"
+          },
+          "unique_count": {
+            "title": "Unique Count",
+            "type": "integer"
+          },
+          "unique_percentage": {
+            "title": "Unique Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "semantic_type",
+          "dtype",
+          "missing_count",
+          "missing_percentage",
+          "unique_count",
+          "unique_percentage",
+          "is_constant",
+          "is_high_cardinality",
+          "is_likely_id"
+        ],
+        "title": "ColumnProfile",
+        "type": "object"
+      },
+      "ComparisonReport": {
+        "additionalProperties": false,
+        "properties": {
+          "best_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Model"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "failed_count": {
+            "default": 0,
+            "title": "Failed Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelComparisonEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "primary_metric": {
+            "title": "Primary Metric",
+            "type": "string"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/ProblemType"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "succeeded_count": {
+            "default": 0,
+            "title": "Succeeded Count",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "generated_at",
+          "problem_type",
+          "primary_metric",
+          "direction"
+        ],
+        "title": "ComparisonReport",
+        "type": "object"
+      },
+      "ComputeConfig": {
+        "additionalProperties": false,
+        "description": "Ephemeral AWS compute sizing. Configuration, never code.",
+        "properties": {
+          "max_parallel_training_jobs": {
+            "default": 4,
+            "minimum": 1.0,
+            "title": "Max Parallel Training Jobs",
+            "type": "integer"
+          },
+          "max_runtime_seconds": {
+            "default": 7200,
+            "minimum": 60.0,
+            "title": "Max Runtime Seconds",
+            "type": "integer"
+          },
+          "processing_instance_count": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Processing Instance Count",
+            "type": "integer"
+          },
+          "processing_instance_type": {
+            "default": "ml.m5.large",
+            "title": "Processing Instance Type",
+            "type": "string"
+          },
+          "processing_volume_size_gb": {
+            "default": 30,
+            "minimum": 5.0,
+            "title": "Processing Volume Size Gb",
+            "type": "integer"
+          },
+          "training_instance_count": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Training Instance Count",
+            "type": "integer"
+          },
+          "training_instance_type": {
+            "default": "ml.m5.large",
+            "title": "Training Instance Type",
+            "type": "string"
+          },
+          "training_volume_size_gb": {
+            "default": 30,
+            "minimum": 5.0,
+            "title": "Training Volume Size Gb",
+            "type": "integer"
+          }
+        },
+        "title": "ComputeConfig",
+        "type": "object"
+      },
+      "ConfusionMatrix": {
+        "additionalProperties": false,
+        "properties": {
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "matrix": {
+            "description": "Row = true label, column = predicted label.",
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Matrix",
+            "type": "array"
+          }
+        },
+        "required": [
+          "labels",
+          "matrix"
+        ],
+        "title": "ConfusionMatrix",
+        "type": "object"
+      },
+      "CreateExperimentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_uri": {
+            "description": "S3 URI of an approved dataset (s3://bucket/key).",
+            "title": "Dataset Uri",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "file_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override the inferred format.",
+            "title": "File Format"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/RequestedProblemType",
+            "default": "auto"
+          },
+          "target_column": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dataset_uri",
+          "target_column"
+        ],
+        "title": "CreateExperimentRequest",
+        "type": "object"
+      },
+      "CreateExperimentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_prefix": {
+            "title": "Artifact Prefix",
+            "type": "string"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExperimentStatus"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "status",
+          "artifact_prefix"
+        ],
+        "title": "CreateExperimentResponse",
+        "type": "object"
+      },
+      "DataDictionary": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnDocumentation"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Id"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_format": {
+            "title": "Source Format",
+            "type": "string"
+          },
+          "source_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Name"
+          },
+          "undocumented_columns": {
+            "description": "Dataset columns with no documentation.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Undocumented Columns",
+            "type": "array"
+          },
+          "unmatched_columns": {
+            "description": "Documented columns absent from the dataset.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Columns",
+            "type": "array"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_format",
+          "uploaded_at"
+        ],
+        "title": "DataDictionary",
+        "type": "object"
+      },
+      "DataQualityConcern": {
+        "additionalProperties": false,
+        "properties": {
+          "affected_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected Columns",
+            "type": "array"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "severity",
+          "explanation"
+        ],
+        "title": "DataQualityConcern",
+        "type": "object"
+      },
+      "DatasetReference": {
+        "additionalProperties": false,
+        "description": "Identity of the source dataset. The dataset itself is never copied.",
+        "properties": {
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etag"
+          },
+          "file_format": {
+            "title": "File Format",
+            "type": "string"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "uri",
+          "file_format"
+        ],
+        "title": "DatasetReference",
+        "type": "object"
+      },
+      "DatasetSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "column_count": {
+            "title": "Column Count",
+            "type": "integer"
+          },
+          "duplicate_row_count": {
+            "title": "Duplicate Row Count",
+            "type": "integer"
+          },
+          "duplicate_row_percentage": {
+            "title": "Duplicate Row Percentage",
+            "type": "number"
+          },
+          "file_format": {
+            "title": "File Format",
+            "type": "string"
+          },
+          "memory_usage_bytes": {
+            "description": "Deep pandas memory usage of the loaded frame.",
+            "title": "Memory Usage Bytes",
+            "type": "integer"
+          },
+          "memory_usage_is_exact": {
+            "default": true,
+            "title": "Memory Usage Is Exact",
+            "type": "boolean"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "sample_row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows actually profiled when the dataset was sampled.",
+            "title": "Sample Row Count"
+          },
+          "sampled": {
+            "default": false,
+            "title": "Sampled",
+            "type": "boolean"
+          },
+          "source_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Size Bytes"
+          },
+          "source_uri": {
+            "title": "Source Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_count",
+          "column_count",
+          "duplicate_row_count",
+          "duplicate_row_percentage",
+          "memory_usage_bytes",
+          "file_format",
+          "source_uri"
+        ],
+        "title": "DatasetSummary",
+        "type": "object"
+      },
+      "DatetimeStats": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "range_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range Days"
+          }
+        },
+        "required": [
+          "min",
+          "max",
+          "range_days"
+        ],
+        "title": "DatetimeStats",
+        "type": "object"
+      },
+      "EdaReport": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnProfile"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/DatasetSummary"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "profiling_config": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Profiling Config",
+            "type": "object"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetAnalysis"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "generated_at",
+          "duration_seconds",
+          "dataset",
+          "target",
+          "columns"
+        ],
+        "title": "EdaReport",
+        "type": "object"
+      },
+      "EnvironmentCapture": {
+        "additionalProperties": false,
+        "description": "Everything needed to explain why a run produced the numbers it produced.",
+        "properties": {
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "ml_factory_version": {
+            "title": "Ml Factory Version",
+            "type": "string"
+          },
+          "package_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Package Versions",
+            "type": "object"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "python_version": {
+            "title": "Python Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "python_version",
+          "platform",
+          "ml_factory_version",
+          "captured_at"
+        ],
+        "title": "EnvironmentCapture",
+        "type": "object"
+      },
+      "ExperimentConfig": {
+        "additionalProperties": false,
+        "description": "Frozen experiment definition. Written once, at training start.",
+        "properties": {
+          "artifact_prefix": {
+            "title": "Artifact Prefix",
+            "type": "string"
+          },
+          "class_weighting": {
+            "$ref": "#/components/schemas/ClassWeighting"
+          },
+          "compute": {
+            "$ref": "#/components/schemas/ComputeConfig"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/DatasetReference"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentCapture"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "feature_selection": {
+            "$ref": "#/components/schemas/FeatureSelection"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSpec"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "preprocessing": {
+            "$ref": "#/components/schemas/PreprocessingConfig"
+          },
+          "primary_metric": {
+            "title": "Primary Metric",
+            "type": "string"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/ProblemType"
+          },
+          "requested_problem_type": {
+            "$ref": "#/components/schemas/RequestedProblemType"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "split": {
+            "$ref": "#/components/schemas/SplitConfig"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "name",
+          "created_at",
+          "dataset",
+          "target_column",
+          "problem_type",
+          "requested_problem_type",
+          "primary_metric",
+          "feature_selection",
+          "split",
+          "preprocessing",
+          "models",
+          "class_weighting",
+          "environment",
+          "artifact_prefix"
+        ],
+        "title": "ExperimentConfig",
+        "type": "object"
+      },
+      "ExperimentListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "experiments": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentRecord"
+            },
+            "title": "Experiments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiments",
+          "count"
+        ],
+        "title": "ExperimentListResponse",
+        "type": "object"
+      },
+      "ExperimentRecord": {
+        "additionalProperties": false,
+        "description": "Metadata and state only. Large ML artifacts always live in the object store.",
+        "properties": {
+          "artifact_prefix": {
+            "title": "Artifact Prefix",
+            "type": "string"
+          },
+          "best_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Model"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "current_stage": {
+            "default": "created",
+            "title": "Current Stage",
+            "type": "string"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/DatasetReference"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "eda_execution_arn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eda Execution Arn"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "model_statuses": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "model name -> ModelRunStatus, mirrored for cheap polling.",
+            "title": "Model Statuses",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "primary_metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Metric"
+          },
+          "report_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Uri"
+          },
+          "requested_problem_type": {
+            "$ref": "#/components/schemas/RequestedProblemType",
+            "default": "auto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExperimentStatus",
+            "default": "CREATED"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          },
+          "training_execution_arn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Execution Arn"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "name",
+          "created_at",
+          "updated_at",
+          "dataset",
+          "target_column",
+          "artifact_prefix"
+        ],
+        "title": "ExperimentRecord",
+        "type": "object"
+      },
+      "ExperimentStatus": {
+        "enum": [
+          "CREATED",
+          "EDA_RUNNING",
+          "EDA_COMPLETED",
+          "FEATURE_REVIEW",
+          "READY_FOR_TRAINING",
+          "PREPARING",
+          "TRAINING",
+          "EVALUATING",
+          "COMPLETED",
+          "COMPLETED_WITH_WARNINGS",
+          "FAILED"
+        ],
+        "title": "ExperimentStatus",
+        "type": "string"
+      },
+      "ExperimentSummary": {
+        "additionalProperties": false,
+        "description": "Everything a report or the reasoning layer needs, in one artifact.",
+        "properties": {
+          "best_model_importance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureImportance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config": {
+            "$ref": "#/components/schemas/ExperimentConfig"
+          },
+          "dataset_column_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Column Count"
+          },
+          "dataset_row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Row Count"
+          },
+          "eda_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Eda Warnings",
+            "type": "array"
+          },
+          "excluded_feature_count": {
+            "default": 0,
+            "title": "Excluded Feature Count",
+            "type": "integer"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "leakage_warning_count": {
+            "default": 0,
+            "title": "Leakage Warning Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "selected_feature_count": {
+            "default": 0,
+            "title": "Selected Feature Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExperimentStatus"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "name",
+          "generated_at",
+          "status",
+          "config"
+        ],
+        "title": "ExperimentSummary",
+        "type": "object"
+      },
+      "FeatureImportance": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureImportanceEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "is_signed": {
+            "default": false,
+            "description": "True when raw values carry direction (linear coefficients).",
+            "title": "Is Signed",
+            "type": "boolean"
+          },
+          "method": {
+            "description": "e.g. 'tree_gain', 'coefficient_magnitude'.",
+            "title": "Method",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "FeatureImportance",
+        "type": "object"
+      },
+      "FeatureImportanceEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "importance": {
+            "description": "Normalized to sum to 1 across features.",
+            "title": "Importance",
+            "type": "number"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "raw_value": {
+            "title": "Raw Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "feature",
+          "importance",
+          "raw_value",
+          "rank"
+        ],
+        "title": "FeatureImportanceEntry",
+        "type": "object"
+      },
+      "FeatureInterpretation": {
+        "additionalProperties": false,
+        "properties": {
+          "concern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concern"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "interpretation": {
+            "title": "Interpretation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feature",
+          "interpretation"
+        ],
+        "title": "FeatureInterpretation",
+        "type": "object"
+      },
+      "FeatureReviewItem": {
+        "additionalProperties": false,
+        "description": "One row of the feature review table: profile, risk and the platform's recommendation.",
+        "properties": {
+          "available_at_prediction_time": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available At Prediction Time"
+          },
+          "documentation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentation"
+          },
+          "dtype": {
+            "title": "Dtype",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "is_constant": {
+            "title": "Is Constant",
+            "type": "boolean"
+          },
+          "is_high_cardinality": {
+            "title": "Is High Cardinality",
+            "type": "boolean"
+          },
+          "is_likely_id": {
+            "title": "Is Likely Id",
+            "type": "boolean"
+          },
+          "leakage_risk": {
+            "$ref": "#/components/schemas/LeakageRiskLevel"
+          },
+          "max_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing_percentage": {
+            "title": "Missing Percentage",
+            "type": "number"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recommended_action": {
+            "$ref": "#/components/schemas/RecommendedAction"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "semantic_type": {
+            "$ref": "#/components/schemas/SemanticType"
+          },
+          "unique_count": {
+            "title": "Unique Count",
+            "type": "integer"
+          },
+          "unique_percentage": {
+            "title": "Unique Percentage",
+            "type": "number"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "feature",
+          "selected",
+          "semantic_type",
+          "dtype",
+          "missing_percentage",
+          "unique_count",
+          "unique_percentage",
+          "is_constant",
+          "is_high_cardinality",
+          "is_likely_id",
+          "leakage_risk",
+          "recommended_action"
+        ],
+        "title": "FeatureReviewItem",
+        "type": "object"
+      },
+      "FeatureReviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "decided": {
+            "default": false,
+            "description": "True once the user has saved a feature selection.",
+            "title": "Decided",
+            "type": "boolean"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureReviewItem"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "problem_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProblemType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selected_count": {
+            "title": "Selected Count",
+            "type": "integer"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "target_column",
+          "problem_type",
+          "features",
+          "selected_count",
+          "excluded_count"
+        ],
+        "title": "FeatureReviewResponse",
+        "type": "object"
+      },
+      "FeatureRisk": {
+        "additionalProperties": false,
+        "description": "Aggregated per-feature verdict, consumed directly by the feature review UI.",
+        "properties": {
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "max_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recommended_action": {
+            "$ref": "#/components/schemas/RecommendedAction"
+          },
+          "risk_level": {
+            "$ref": "#/components/schemas/LeakageRiskLevel"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "feature",
+          "risk_level",
+          "max_severity",
+          "recommended_action"
+        ],
+        "title": "FeatureRisk",
+        "type": "object"
+      },
+      "FeatureSelection": {
+        "additionalProperties": false,
+        "description": "The exact feature decision made by the user. Persisted verbatim.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "excluded_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Features",
+            "type": "array"
+          },
+          "exclusion_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Exclusion Reasons",
+            "type": "object"
+          },
+          "selected_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Features",
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_features"
+        ],
+        "title": "FeatureSelection",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_root": {
+            "title": "Artifact Root",
+            "type": "string"
+          },
+          "available_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Models",
+            "type": "array"
+          },
+          "bedrock_enabled": {
+            "title": "Bedrock Enabled",
+            "type": "boolean"
+          },
+          "configuration_problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Configuration Problems",
+            "type": "array"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "orchestrator": {
+            "title": "Orchestrator",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "mode",
+          "orchestrator",
+          "artifact_root",
+          "bedrock_enabled"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "LeakageFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Evidence",
+            "type": "object"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "recommended_action": {
+            "$ref": "#/components/schemas/RecommendedAction"
+          },
+          "risk_level": {
+            "$ref": "#/components/schemas/LeakageRiskLevel"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          }
+        },
+        "required": [
+          "feature",
+          "rule",
+          "severity",
+          "risk_level",
+          "explanation",
+          "recommended_action"
+        ],
+        "title": "LeakageFinding",
+        "type": "object"
+      },
+      "LeakageReport": {
+        "additionalProperties": false,
+        "properties": {
+          "checks_executed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checks Executed",
+            "type": "array"
+          },
+          "checks_skipped": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "rule id -> reason the check could not run",
+            "title": "Checks Skipped",
+            "type": "object"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "feature_risks": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureRisk"
+            },
+            "title": "Feature Risks",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakageFinding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "generated_at",
+          "target_column"
+        ],
+        "title": "LeakageReport",
+        "type": "object"
+      },
+      "LeakageRiskLevel": {
+        "description": "Deterministic evidence strength. ``CONFIRMED_DUPLICATE`` needs structural proof.",
+        "enum": [
+          "none",
+          "requires_review",
+          "potential_leakage",
+          "confirmed_duplicate"
+        ],
+        "title": "LeakageRiskLevel",
+        "type": "string"
+      },
+      "MetricDirection": {
+        "enum": [
+          "maximize",
+          "minimize"
+        ],
+        "title": "MetricDirection",
+        "type": "string"
+      },
+      "MetricSet": {
+        "additionalProperties": false,
+        "description": "Metrics for one model on one fold.\n\n``values`` holds every successfully computed metric. A metric that could not be computed\nis absent and explained in ``warnings`` \u2014 a metric failure never fails an experiment.",
+        "properties": {
+          "confusion_matrix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfusionMatrix"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "MetricSet",
+        "type": "object"
+      },
+      "ModelArtifacts": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Uri"
+          },
+          "model_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Uri"
+          },
+          "preprocessor_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preprocessor Uri"
+          }
+        },
+        "title": "ModelArtifacts",
+        "type": "object"
+      },
+      "ModelComparisonEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "feature_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Count"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Metrics",
+            "type": "object"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "primary_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Score"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelRunStatus"
+          },
+          "training_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Duration Seconds"
+          },
+          "warning_count": {
+            "default": 0,
+            "title": "Warning Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_name",
+          "display_name",
+          "status"
+        ],
+        "title": "ModelComparisonEntry",
+        "type": "object"
+      },
+      "ModelDescriptor": {
+        "additionalProperties": false,
+        "description": "Catalogue entry describing an available model plugin (served by ``GET /models``).",
+        "properties": {
+          "available": {
+            "default": true,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "default_parameters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Default Parameters",
+            "type": "object"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "library": {
+            "title": "Library",
+            "type": "string"
+          },
+          "library_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_dense_numeric": {
+            "title": "Requires Dense Numeric",
+            "type": "boolean"
+          },
+          "supported_problem_types": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemType"
+            },
+            "title": "Supported Problem Types",
+            "type": "array"
+          },
+          "supports_class_weighting": {
+            "title": "Supports Class Weighting",
+            "type": "boolean"
+          },
+          "supports_native_categorical": {
+            "title": "Supports Native Categorical",
+            "type": "boolean"
+          },
+          "supports_probabilities": {
+            "title": "Supports Probabilities",
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "library",
+          "supported_problem_types",
+          "requires_dense_numeric",
+          "supports_native_categorical",
+          "supports_class_weighting",
+          "supports_probabilities"
+        ],
+        "title": "ModelDescriptor",
+        "type": "object"
+      },
+      "ModelMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts": {
+            "$ref": "#/components/schemas/ModelArtifacts"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "feature_count": {
+            "default": 0,
+            "title": "Feature Count",
+            "type": "integer"
+          },
+          "feature_importance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureImportance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "features_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Features Used",
+            "type": "array"
+          },
+          "hyperparameters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Hyperparameters",
+            "type": "object"
+          },
+          "library": {
+            "title": "Library",
+            "type": "string"
+          },
+          "library_version": {
+            "title": "Library Version",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/MetricSet"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "package_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Package Versions",
+            "type": "object"
+          },
+          "preprocessing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreprocessingMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "primary_metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Metric"
+          },
+          "primary_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Score"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/ProblemType"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelRunStatus"
+          },
+          "train_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricSet"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Training-fold metrics, for overfitting inspection only."
+          },
+          "training_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Completed At"
+          },
+          "training_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Duration Seconds"
+          },
+          "training_row_count": {
+            "default": 0,
+            "title": "Training Row Count",
+            "type": "integer"
+          },
+          "training_started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Started At"
+          },
+          "validation_row_count": {
+            "default": 0,
+            "title": "Validation Row Count",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "model_name",
+          "display_name",
+          "status",
+          "problem_type",
+          "library",
+          "library_version"
+        ],
+        "title": "ModelMetadata",
+        "type": "object"
+      },
+      "ModelRunState": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "primary_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Score"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelRunStatus"
+          }
+        },
+        "required": [
+          "model_name",
+          "display_name",
+          "status"
+        ],
+        "title": "ModelRunState",
+        "type": "object"
+      },
+      "ModelRunStatus": {
+        "enum": [
+          "QUEUED",
+          "RUNNING",
+          "COMPLETED",
+          "FAILED",
+          "SKIPPED"
+        ],
+        "title": "ModelRunStatus",
+        "type": "string"
+      },
+      "ModelSpec": {
+        "additionalProperties": false,
+        "description": "A model to train, plus any user overrides of the plugin defaults.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ModelSpec",
+        "type": "object"
+      },
+      "NumericStats": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "negative_count": {
+            "title": "Negative Count",
+            "type": "integer"
+          },
+          "q01": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q01"
+          },
+          "q05": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q05"
+          },
+          "q25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q25"
+          },
+          "q75": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q75"
+          },
+          "q95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q95"
+          },
+          "q99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q99"
+          },
+          "skewness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skewness"
+          },
+          "std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std"
+          },
+          "zero_count": {
+            "title": "Zero Count",
+            "type": "integer"
+          },
+          "zero_percentage": {
+            "title": "Zero Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max",
+          "mean",
+          "median",
+          "std",
+          "q01",
+          "q05",
+          "q25",
+          "q75",
+          "q95",
+          "q99",
+          "zero_count",
+          "zero_percentage",
+          "negative_count"
+        ],
+        "title": "NumericStats",
+        "type": "object"
+      },
+      "PreprocessingConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "categorical_fill_value": {
+            "default": "__missing__",
+            "title": "Categorical Fill Value",
+            "type": "string"
+          },
+          "categorical_imputation": {
+            "default": "constant",
+            "description": "constant | most_frequent",
+            "title": "Categorical Imputation",
+            "type": "string"
+          },
+          "datetime_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Datetime Features",
+            "type": "array"
+          },
+          "derive_datetime_features": {
+            "default": true,
+            "title": "Derive Datetime Features",
+            "type": "boolean"
+          },
+          "drop_constant_columns": {
+            "default": true,
+            "title": "Drop Constant Columns",
+            "type": "boolean"
+          },
+          "drop_text_columns": {
+            "default": true,
+            "title": "Drop Text Columns",
+            "type": "boolean"
+          },
+          "numeric_fill_value": {
+            "default": 0.0,
+            "title": "Numeric Fill Value",
+            "type": "number"
+          },
+          "numeric_imputation": {
+            "default": "median",
+            "description": "median | mean | constant",
+            "title": "Numeric Imputation",
+            "type": "string"
+          },
+          "one_hot_max_categories": {
+            "default": 50,
+            "minimum": 2.0,
+            "title": "One Hot Max Categories",
+            "type": "integer"
+          },
+          "one_hot_min_frequency": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "One Hot Min Frequency"
+          },
+          "scale_numeric": {
+            "default": true,
+            "description": "Applied only for plugins that require dense scaled input.",
+            "title": "Scale Numeric",
+            "type": "boolean"
+          }
+        },
+        "title": "PreprocessingConfig",
+        "type": "object"
+      },
+      "PreprocessingMetadata": {
+        "additionalProperties": false,
+        "description": "What the fitted pipeline actually did. Written by the preparation job.",
+        "properties": {
+          "boolean_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Boolean Columns",
+            "type": "array"
+          },
+          "categorical_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categorical Columns",
+            "type": "array"
+          },
+          "config_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Digest"
+          },
+          "datetime_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Datetime Columns",
+            "type": "array"
+          },
+          "derived_datetime_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived Datetime Features",
+            "type": "array"
+          },
+          "dropped_columns": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "column -> reason it was dropped",
+            "title": "Dropped Columns",
+            "type": "object"
+          },
+          "fitted_on": {
+            "default": "train",
+            "description": "Learned transforms fit on the train fold only.",
+            "title": "Fitted On",
+            "type": "string"
+          },
+          "numeric_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Numeric Columns",
+            "type": "array"
+          },
+          "output_feature_count": {
+            "default": 0,
+            "title": "Output Feature Count",
+            "type": "integer"
+          },
+          "output_feature_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Feature Names",
+            "type": "array"
+          },
+          "strategy": {
+            "default": "dense_numeric",
+            "description": "dense_numeric | native_categorical",
+            "title": "Strategy",
+            "type": "string"
+          }
+        },
+        "title": "PreprocessingMetadata",
+        "type": "object"
+      },
+      "ProblemType": {
+        "enum": [
+          "binary_classification",
+          "multiclass_classification",
+          "regression"
+        ],
+        "title": "ProblemType",
+        "type": "string"
+      },
+      "ProposedExperiment": {
+        "additionalProperties": false,
+        "description": "A proposal only. A human starts the next experiment in v1.0.",
+        "properties": {
+          "expected_insight": {
+            "title": "Expected Insight",
+            "type": "string"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "priority": {
+            "default": "medium",
+            "description": "low | medium | high",
+            "title": "Priority",
+            "type": "string"
+          },
+          "proposed_changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposed Changes",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "hypothesis",
+          "expected_insight"
+        ],
+        "title": "ProposedExperiment",
+        "type": "object"
+      },
+      "ReasoningReport": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "data_quality_concerns": {
+            "items": {
+              "$ref": "#/components/schemas/DataQualityConcern"
+            },
+            "title": "Data Quality Concerns",
+            "type": "array"
+          },
+          "disclaimer": {
+            "default": "Generated by a language model from deterministic outputs. It contains no computed statistics and never modifies experiment results or feature selection.",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "executive_summary": {
+            "title": "Executive Summary",
+            "type": "string"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "feature_interpretations": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureInterpretation"
+            },
+            "title": "Feature Interpretations",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "input_artifacts": {
+            "description": "Artifact keys supplied as context.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Artifacts",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "model_behaviour_narrative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Behaviour Narrative"
+          },
+          "model_id": {
+            "description": "Bedrock model identifier used for this analysis.",
+            "title": "Model Id",
+            "type": "string"
+          },
+          "proposed_experiments": {
+            "items": {
+              "$ref": "#/components/schemas/ProposedExperiment"
+            },
+            "title": "Proposed Experiments",
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "semantic_leakage": {
+            "items": {
+              "$ref": "#/components/schemas/SemanticLeakageFinding"
+            },
+            "title": "Semantic Leakage",
+            "type": "array"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "generated_at",
+          "model_id",
+          "executive_summary"
+        ],
+        "title": "ReasoningReport",
+        "type": "object"
+      },
+      "ReasoningRequest": {
+        "additionalProperties": false,
+        "description": "Business context the deterministic artifacts cannot supply.",
+        "properties": {
+          "prediction_timing": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the prediction is made relative to the outcome being predicted.",
+            "title": "Prediction Timing"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An optional focused question.",
+            "title": "Question"
+          },
+          "target_definition": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the target actually means in business terms.",
+            "title": "Target Definition"
+          }
+        },
+        "title": "ReasoningRequest",
+        "type": "object"
+      },
+      "RecommendedAction": {
+        "description": "What the platform suggests. The user always decides.",
+        "enum": [
+          "keep",
+          "review",
+          "consider_excluding",
+          "strongly_consider_excluding",
+          "excluded_automatically"
+        ],
+        "title": "RecommendedAction",
+        "type": "string"
+      },
+      "RequestedProblemType": {
+        "description": "What the user may ask for. ``auto`` is resolved during profiling.",
+        "enum": [
+          "auto",
+          "binary_classification",
+          "multiclass_classification",
+          "regression"
+        ],
+        "title": "RequestedProblemType",
+        "type": "string"
+      },
+      "SemanticLeakageFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "description": "low | medium | high \u2014 the model's own qualifier.",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "evidence_basis": {
+            "description": "Which deterministic inputs or documentation fields the judgement rests on.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Basis",
+            "type": "array"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "reasoning": {
+            "description": "Why this feature may not be available at prediction time.",
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "recommended_action": {
+            "$ref": "#/components/schemas/RecommendedAction",
+            "default": "review"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          }
+        },
+        "required": [
+          "feature",
+          "severity",
+          "confidence",
+          "reasoning"
+        ],
+        "title": "SemanticLeakageFinding",
+        "type": "object"
+      },
+      "SemanticType": {
+        "description": "Inferred meaning of a column, independent of its pandas dtype.",
+        "enum": [
+          "numeric_continuous",
+          "numeric_discrete",
+          "boolean",
+          "categorical",
+          "high_cardinality_categorical",
+          "text",
+          "datetime",
+          "identifier",
+          "constant",
+          "empty",
+          "unknown"
+        ],
+        "title": "SemanticType",
+        "type": "string"
+      },
+      "Severity": {
+        "enum": [
+          "info",
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "SplitConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "group_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Column"
+          },
+          "random_seed": {
+            "default": 42,
+            "title": "Random Seed",
+            "type": "integer"
+          },
+          "strategy": {
+            "default": "stratified_random",
+            "description": "Registered split strategy name.",
+            "title": "Strategy",
+            "type": "string"
+          },
+          "stratify": {
+            "default": true,
+            "title": "Stratify",
+            "type": "boolean"
+          },
+          "time_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reserved for temporal splitting; unused in v1.0.",
+            "title": "Time Column"
+          },
+          "validation_fraction": {
+            "default": 0.2,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Validation Fraction",
+            "type": "number"
+          }
+        },
+        "title": "SplitConfig",
+        "type": "object"
+      },
+      "StartTrainingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExperimentStatus"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "status",
+          "models"
+        ],
+        "title": "StartTrainingResponse",
+        "type": "object"
+      },
+      "TargetAnalysis": {
+        "additionalProperties": false,
+        "properties": {
+          "class_distribution": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClassDistributionEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Distribution"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "dtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dtype"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "imbalance_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Majority class count divided by minority class count. None for regression.",
+            "title": "Imbalance Ratio"
+          },
+          "inferred_problem_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProblemType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing_count": {
+            "default": 0,
+            "title": "Missing Count",
+            "type": "integer"
+          },
+          "missing_percentage": {
+            "default": 0.0,
+            "title": "Missing Percentage",
+            "type": "number"
+          },
+          "numeric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "positive_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Class"
+          },
+          "unique_count": {
+            "default": 0,
+            "title": "Unique Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "column",
+          "exists",
+          "inferred_problem_type"
+        ],
+        "title": "TargetAnalysis",
+        "type": "object"
+      },
+      "TrainingConfigRequest": {
+        "additionalProperties": false,
+        "description": "User-facing training configuration. Validated against the dataset before it is stored.",
+        "properties": {
+          "class_weighting": {
+            "$ref": "#/components/schemas/ClassWeighting",
+            "default": "auto"
+          },
+          "model_parameters": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Model Parameters",
+            "type": "object"
+          },
+          "models": {
+            "description": "Empty means every supported model.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "preprocessing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreprocessingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "primary_metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Metric"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/RequestedProblemType",
+            "default": "auto"
+          },
+          "random_seed": {
+            "default": 42,
+            "title": "Random Seed",
+            "type": "integer"
+          },
+          "validation_fraction": {
+            "default": 0.2,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Validation Fraction",
+            "type": "number"
+          }
+        },
+        "title": "TrainingConfigRequest",
+        "type": "object"
+      },
+      "TrainingConfigResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "available_metrics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Metrics",
+            "type": "array"
+          },
+          "available_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Models",
+            "type": "array"
+          },
+          "class_weighting": {
+            "$ref": "#/components/schemas/ClassWeighting"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "preprocessing": {
+            "$ref": "#/components/schemas/PreprocessingConfig"
+          },
+          "primary_metric": {
+            "title": "Primary Metric",
+            "type": "string"
+          },
+          "problem_type": {
+            "$ref": "#/components/schemas/ProblemType"
+          },
+          "random_seed": {
+            "title": "Random Seed",
+            "type": "integer"
+          },
+          "requested_problem_type": {
+            "$ref": "#/components/schemas/RequestedProblemType"
+          },
+          "selected_feature_count": {
+            "title": "Selected Feature Count",
+            "type": "integer"
+          },
+          "selected_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Models",
+            "type": "array"
+          },
+          "validation_fraction": {
+            "title": "Validation Fraction",
+            "type": "number"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "problem_type",
+          "requested_problem_type",
+          "primary_metric",
+          "available_metrics",
+          "available_models",
+          "selected_models",
+          "validation_fraction",
+          "random_seed",
+          "class_weighting",
+          "preprocessing",
+          "selected_feature_count"
+        ],
+        "title": "TrainingConfigResponse",
+        "type": "object"
+      },
+      "TrainingStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "best_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Model"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "current_stage": {
+            "title": "Current Stage",
+            "type": "string"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelRunState"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "primary_metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Metric"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExperimentStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "status",
+          "current_stage",
+          "models",
+          "updated_at"
+        ],
+        "title": "TrainingStatusResponse",
+        "type": "object"
+      },
+      "UpdateFeatureSelectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "exclusion_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Exclusion Reasons",
+            "type": "object"
+          },
+          "selected_features": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Selected Features",
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected_features"
+        ],
+        "title": "UpdateFeatureSelectionRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WarningCategory": {
+        "description": "Warning taxonomy. Stable \u2014 consumers filter and group on these values.",
+        "enum": [
+          "data_quality",
+          "leakage",
+          "anomaly",
+          "schema",
+          "target",
+          "feature",
+          "preprocessing",
+          "metric",
+          "model"
+        ],
+        "title": "WarningCategory",
+        "type": "string"
+      }
+    }
+  },
+  "info": {
+    "description": "\nInternal platform that accelerates classical-ML POCs: automated EDA, deterministic data\nquality and leakage screening, supervised feature review, classical model training and\ncomparison, and \u2014 strictly after the deterministic results exist \u2014 semantic interpretation.\n",
+    "title": "ML Factory",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/experiments": {
+      "get": {
+        "operationId": "list_experiments_api_v1_experiments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Restrict to experiments you created.",
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Restrict to experiments you created.",
+              "title": "Mine",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Remote-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Remote-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Experiments",
+        "tags": [
+          "experiments"
+        ]
+      },
+      "post": {
+        "description": "Create an experiment and start EDA. Returns immediately \u2014 AWS work runs asynchronously.",
+        "operationId": "create_experiment_api_v1_experiments_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Remote-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Remote-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExperimentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateExperimentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Experiment",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}": {
+      "delete": {
+        "description": "Soft delete: the record is hidden, the artifacts remain for audit.",
+        "operationId": "delete_experiment_api_v1_experiments__experiment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Experiment",
+        "tags": [
+          "experiments"
+        ]
+      },
+      "get": {
+        "operationId": "get_experiment_api_v1_experiments__experiment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Experiment",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/comparison": {
+      "get": {
+        "operationId": "get_comparison_api_v1_experiments__experiment_id__comparison_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Comparison",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/data-dictionary": {
+      "get": {
+        "operationId": "get_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataDictionary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Data Dictionary",
+        "tags": [
+          "data dictionary"
+        ]
+      },
+      "post": {
+        "operationId": "upload_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataDictionary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Data Dictionary",
+        "tags": [
+          "data dictionary"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/eda": {
+      "get": {
+        "operationId": "get_eda_api_v1_experiments__experiment_id__eda_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdaReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Eda",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/features": {
+      "get": {
+        "operationId": "get_features_api_v1_experiments__experiment_id__features_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Features",
+        "tags": [
+          "experiments"
+        ]
+      },
+      "put": {
+        "operationId": "put_features_api_v1_experiments__experiment_id__features_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Remote-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Remote-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFeatureSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureSelection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Features",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/leakage": {
+      "get": {
+        "operationId": "get_leakage_api_v1_experiments__experiment_id__leakage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeakageReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Leakage",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/models/{model_name}": {
+      "get": {
+        "operationId": "get_model_api_v1_experiments__experiment_id__models__model_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model_name",
+            "required": true,
+            "schema": {
+              "title": "Model Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelMetadata"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/reasoning": {
+      "get": {
+        "operationId": "get_reasoning_api_v1_experiments__experiment_id__reasoning_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasoningReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Reasoning",
+        "tags": [
+          "reasoning"
+        ]
+      },
+      "post": {
+        "description": "Interpret the deterministic results. The model never computes or changes anything.",
+        "operationId": "run_reasoning_api_v1_experiments__experiment_id__reasoning_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasoningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasoningReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Reasoning",
+        "tags": [
+          "reasoning"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/summary": {
+      "get": {
+        "operationId": "get_summary_api_v1_experiments__experiment_id__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Summary",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/training": {
+      "post": {
+        "operationId": "start_training_api_v1_experiments__experiment_id__training_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Remote-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Remote-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartTrainingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Training",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/training-config": {
+      "get": {
+        "operationId": "get_training_config_api_v1_experiments__experiment_id__training_config_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Training Config",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/training-status": {
+      "get": {
+        "operationId": "get_training_status_api_v1_experiments__experiment_id__training_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Training Status",
+        "tags": [
+          "experiments"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "description": "Metrics that may be selected as the primary (ranking) metric for a problem type.",
+        "operationId": "list_metrics_api_v1_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "problem_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProblemType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Metrics Api V1 Metrics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Metrics",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "operationId": "list_models_api_v1_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "problem_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProblemType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Problem Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModelDescriptor"
+                  },
+                  "title": "Response List Models Api V1 Models Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    }
+  }
+}

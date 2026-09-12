@@ -10,8 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# ml_engine is the deterministic core. Only its IO boundary may know about AWS.
-ALLOWED_AWS_MODULES = {"ml_engine/io/s3.py", "ml_engine/reasoning/client.py"}
+# ml_engine is the deterministic core. Exactly one module inside it may know about AWS.
+ALLOWED_AWS_MODULES = {"ml_engine/io/s3.py"}
 
 
 def _imports(path: Path) -> set[str]:
