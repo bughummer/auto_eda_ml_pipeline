@@ -1,0 +1,136 @@
+"""Pydantic v2 contracts — the single source of truth for every artifact and API payload.
+
+Producers (jobs, ml_engine) and consumers (backend, frontend types) share these definitions,
+so an artifact schema can never drift between the side that writes it and the side that reads it.
+"""
+
+from ml_engine.contracts.common import (
+    ACTION_ORDER,
+    LEAKAGE_RISK_ORDER,
+    SEVERITY_ORDER,
+    ClassWeighting,
+    ExperimentStatus,
+    LeakageRiskLevel,
+    MetricDirection,
+    ModelRunStatus,
+    ProblemType,
+    RecommendedAction,
+    RequestedProblemType,
+    SemanticType,
+    Severity,
+    StrictModel,
+    WarningCategory,
+)
+from ml_engine.contracts.comparison import (
+    ComparisonReport,
+    ExperimentSummary,
+    ModelComparisonEntry,
+)
+from ml_engine.contracts.config import (
+    DEFAULT_RANDOM_SEED,
+    DEFAULT_VALIDATION_FRACTION,
+    ComputeConfig,
+    DatasetReference,
+    EnvironmentCapture,
+    ExperimentConfig,
+    FeatureSelection,
+    ModelSpec,
+    PreprocessingConfig,
+    SplitConfig,
+    TrainingConfig,
+)
+from ml_engine.contracts.dictionary import ColumnDocumentation, DataDictionary
+from ml_engine.contracts.eda import (
+    CategoricalStats,
+    CategoryFrequency,
+    ClassDistributionEntry,
+    ColumnProfile,
+    DatasetSummary,
+    DatetimeStats,
+    EdaReport,
+    NumericStats,
+    TargetAnalysis,
+)
+from ml_engine.contracts.experiment import ExperimentRecord
+from ml_engine.contracts.leakage import FeatureRisk, LeakageFinding, LeakageReport
+from ml_engine.contracts.metrics import ConfusionMatrix, MetricDefinition, MetricSet
+from ml_engine.contracts.model import (
+    FeatureImportance,
+    FeatureImportanceEntry,
+    ModelArtifacts,
+    ModelFailure,
+    ModelMetadata,
+    PreprocessingMetadata,
+)
+from ml_engine.contracts.preparation import PreparationReport, SplitSummary
+from ml_engine.contracts.reasoning import (
+    DataQualityConcern,
+    FeatureInterpretation,
+    ProposedExperiment,
+    ReasoningReport,
+    SemanticLeakageFinding,
+)
+from ml_engine.contracts.warnings import AnalysisWarning, sort_warnings
+
+__all__ = [
+    "ACTION_ORDER",
+    "LEAKAGE_RISK_ORDER",
+    "SEVERITY_ORDER",
+    "AnalysisWarning",
+    "CategoricalStats",
+    "CategoryFrequency",
+    "ClassDistributionEntry",
+    "ClassWeighting",
+    "ColumnDocumentation",
+    "ColumnProfile",
+    "ComparisonReport",
+    "ComputeConfig",
+    "ConfusionMatrix",
+    "DEFAULT_RANDOM_SEED",
+    "DEFAULT_VALIDATION_FRACTION",
+    "DataDictionary",
+    "DataQualityConcern",
+    "DatasetReference",
+    "DatasetSummary",
+    "DatetimeStats",
+    "EdaReport",
+    "EnvironmentCapture",
+    "ExperimentConfig",
+    "ExperimentRecord",
+    "ExperimentStatus",
+    "ExperimentSummary",
+    "FeatureImportance",
+    "FeatureImportanceEntry",
+    "FeatureInterpretation",
+    "FeatureRisk",
+    "FeatureSelection",
+    "LeakageFinding",
+    "LeakageReport",
+    "LeakageRiskLevel",
+    "MetricDefinition",
+    "MetricDirection",
+    "MetricSet",
+    "ModelArtifacts",
+    "ModelComparisonEntry",
+    "ModelFailure",
+    "ModelMetadata",
+    "ModelRunStatus",
+    "ModelSpec",
+    "PreparationReport",
+    "PreprocessingConfig",
+    "PreprocessingMetadata",
+    "ProblemType",
+    "ProposedExperiment",
+    "ReasoningReport",
+    "RecommendedAction",
+    "RequestedProblemType",
+    "SemanticLeakageFinding",
+    "SemanticType",
+    "Severity",
+    "SplitConfig",
+    "SplitSummary",
+    "StrictModel",
+    "TrainingConfig",
+    "WarningCategory",
+    "sort_warnings",
+]
