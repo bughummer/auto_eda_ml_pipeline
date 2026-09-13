@@ -77,9 +77,7 @@ def _config(dataset_csv: str, layout) -> ExperimentConfig:
     )
 
 
-def test_recipe_a_profiles_and_screens_without_any_platform_scaffolding(
-    store, layout, dataset_csv
-):
+def test_recipe_a_profiles_and_screens_without_any_platform_scaffolding(store, layout, dataset_csv):
     eda, leakage = run_profiling(
         store,
         layout,

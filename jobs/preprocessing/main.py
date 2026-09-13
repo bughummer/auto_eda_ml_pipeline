@@ -13,11 +13,14 @@ from datetime import UTC, datetime
 import pandas as pd
 
 from jobs._common.runtime import JobError, base_parser, run_entrypoint
-from ml_engine.contracts.common import Severity, WarningCategory
+from ml_engine.contracts.common import LeakageRiskLevel, Severity, WarningCategory
 from ml_engine.contracts.config import ExperimentConfig
 from ml_engine.contracts.eda import EdaReport
+from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.contracts.preparation import PreparationReport
+from ml_engine.contracts.proposals import DerivedFeature, RejectedProposal
 from ml_engine.contracts.warnings import AnalysisWarning, sort_warnings
+from ml_engine.features import apply_proposals, derivation_warnings, validate_proposals
 from ml_engine.io import (
     ExperimentLayout,
     ObjectStore,
@@ -28,8 +31,10 @@ from ml_engine.io import (
     write_model,
     write_parquet,
 )
+from ml_engine.leakage import analyze_leakage
 from ml_engine.models import get_plugin
 from ml_engine.preprocessing import FeaturePipeline, PreprocessingError, plan_columns
+from ml_engine.profiling import profile_dataset
 from ml_engine.splitting import SplittingError, split_dataset
 
 LOGGER = logging.getLogger("ml_factory.jobs.preparation")
@@ -85,7 +90,15 @@ def run_preparation(
     if frame.empty:
         raise JobError("NO_USABLE_ROWS", "No rows remain after dropping rows without a target.")
 
+    frame, derived, rejected, derived_leakage = _derive_features(
+        frame, config, experiment_id=experiment_id, warnings=warnings
+    )
+
     requested = list(config.feature_selection.selected_features)
+    # An approved proposal is already a decision to use the feature; requiring it to be listed
+    # again would let a derived column be computed and then silently never reach the model.
+    requested.extend(feature.name for feature in derived if feature.name not in requested)
+
     plan = plan_columns(frame, requested, config.preprocessing, eda)
     warnings.extend(plan.warnings)
     if plan.is_empty:
@@ -130,6 +143,9 @@ def run_preparation(
         target_column=config.target_column,
         requested_features=requested,
         usable_features=plan.usable,
+        derived_features=derived,
+        rejected_proposals=rejected,
+        derived_leakage=derived_leakage,
         dropped_features=plan.dropped,
         rows_before=rows_before,
         rows_after=len(frame),
@@ -145,6 +161,110 @@ def run_preparation(
         report.split.validation_row_count,
     )
     return report
+
+
+def _derive_features(
+    frame: pd.DataFrame,
+    config: ExperimentConfig,
+    *,
+    experiment_id: str,
+    warnings: list[AnalysisWarning],
+) -> tuple[pd.DataFrame, list[DerivedFeature], list[RejectedProposal], LeakageReport | None]:
+    """Apply the approved derived-feature specifications, then screen what they produced.
+
+    Derivation happens here rather than in the EDA job because a proposal is approved after the
+    profile exists. Every operation is row-wise, so computing before the split cannot move
+    information across the fold boundary.
+
+    The specifications are re-validated against the frame as it actually is: a configuration
+    frozen against an earlier version of the dataset can name a column that has since been
+    renamed, and one that reads the target must never be computed, wherever it came from.
+    """
+    if not config.derived_features:
+        return frame, [], [], None
+
+    accepted, rejected = validate_proposals(
+        config.derived_features, frame, target_column=config.target_column
+    )
+    for refusal in rejected:
+        warnings.append(
+            AnalysisWarning(
+                rule="derived_feature_rejected",
+                category=WarningCategory.FEATURE,
+                severity=Severity.HIGH,
+                message=(
+                    f"Approved derived feature '{refusal.name}' was not computed: {refusal.message}"
+                ),
+                column=refusal.name,
+                details={"reason": refusal.reason.value},
+            )
+        )
+
+    frame, derived = apply_proposals(frame, accepted)
+    warnings.extend(derivation_warnings(derived, row_count=len(frame)))
+    if not derived:
+        return frame, derived, rejected, None
+
+    LOGGER.info("Derived %d feature(s): %s", len(derived), ", ".join(f.name for f in derived))
+    leakage = _screen_derived_features(frame, derived, config, experiment_id=experiment_id)
+    warnings.extend(_leakage_warnings(leakage))
+    return frame, derived, rejected, leakage
+
+
+def _screen_derived_features(
+    frame: pd.DataFrame,
+    derived: list[DerivedFeature],
+    config: ExperimentConfig,
+    *,
+    experiment_id: str,
+) -> LeakageReport | None:
+    """Run the leakage rules over the derived columns and the target, and nothing else.
+
+    The original columns were screened by the EDA job already. Screening only what is new keeps
+    the cost proportional to the handful of derived columns rather than to the whole dataset.
+    """
+    columns = [feature.name for feature in derived]
+    subset = frame[[*columns, config.target_column]]
+    try:
+        subset_eda = profile_dataset(
+            subset,
+            experiment_id=experiment_id,
+            target_column=config.target_column,
+            source_uri=config.dataset.uri,
+            file_format=config.dataset.file_format,
+        )
+        return analyze_leakage(
+            subset,
+            experiment_id=experiment_id,
+            target_column=config.target_column,
+            problem_type=config.problem_type,
+            eda=subset_eda,
+        )
+    except Exception:  # screening must never lose an otherwise prepared experiment
+        LOGGER.exception("Leakage screening of derived features failed")
+        return None
+
+
+def _leakage_warnings(report: LeakageReport | None) -> list[AnalysisWarning]:
+    """Surface the serious derived-feature findings in the ordinary warning stream."""
+    if report is None:
+        return []
+    serious = {LeakageRiskLevel.CONFIRMED_DUPLICATE, LeakageRiskLevel.POTENTIAL_LEAKAGE}
+    return [
+        AnalysisWarning(
+            rule=f"derived_{finding.rule}",
+            category=WarningCategory.LEAKAGE,
+            severity=finding.severity,
+            message=(
+                f"Derived feature '{finding.feature}' was flagged by leakage screening: "
+                f"{finding.explanation}"
+            ),
+            column=finding.feature,
+            recommended_action=finding.recommended_action,
+        )
+        for finding in report.findings
+        if finding.risk_level in serious
+    ]
 
 
 def _serializable(frame: pd.DataFrame) -> pd.DataFrame:

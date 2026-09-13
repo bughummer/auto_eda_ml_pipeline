@@ -83,6 +83,7 @@ ml_engine/        deterministic ML core. Pure Python. NO aws, NO fastapi imports
   io/             dataset loading (csv/parquet), object store abstraction, S3 URI handling
   profiling/      EDA computation
   leakage/        deterministic leakage & feature-risk rules
+  features/       derived-feature specifications: validation and row-wise execution
   preprocessing/  ColumnTransformer construction, fit/transform, persistence
   splitting/      train/validation split strategies
   models/         model plugins (base + registry + implementations)
@@ -95,7 +96,8 @@ ml_engine/        deterministic ML core. Pure Python. NO aws, NO fastapi imports
 jobs/             thin entrypoints executed inside SageMaker containers
   _common/        argument parsing, artifact IO, logging, failure reporting
   profiling/      Processing job: EDA + deterministic leakage
-  preprocessing/  Processing job: validation, split, fit preprocessing, materialize folds
+  preprocessing/  Processing job: validation, derived features, split, fit preprocessing,
+                  materialize folds
   training/       Training job: one model, one job
   evaluation/     Processing job: aggregation, comparison, experiment summary
 
@@ -370,6 +372,8 @@ Single error envelope for the whole API:
 | AD-11 | Experiment records live in the artifact bucket as three single-writer JSON objects; DynamoDB is removed (supersedes AD-3) | the platform then uses exactly two AWS data services — S3 and SageMaker — instead of three. An experiment becomes one self-contained prefix: copyable, auditable and restorable without a database. Listing is a prefix listing with a delimiter, and Step Functions writes stage transitions with the `s3:putObject` SDK integration, so the "cheap query" argument behind AD-3 no longer holds |
 | AD-12 | No local execution mode: the platform is AWS-only, and the in-process runner is a test double under `tests/support/` | two supported runtimes meant two behaviours to reason about for no production benefit. The end-to-end tests still exercise the real job code through the same contracts, against an in-memory store addressed exactly as S3 is |
 | AD-13 | Any configured artifact bucket can be browsed read-only from the UI | experiment results are already self-contained in their prefix, so showing another environment's results costs one query parameter rather than a second deployment or a shared database. Writes always target the platform's own bucket |
+| AD-14 | Derived features are declared as specifications from a closed vocabulary, never as generated code | a specification can be validated before it runs, reproduced exactly from the frozen configuration, and read by a human asking where a column came from. Generated code can do none of those, and executing it would put model output inside the trust boundary the dataset allow-list and job role exist to draw. The vocabulary is `ratio`, `difference`, `date_difference`, `map_categories` and `is_missing` — all row-wise, so derivation before the split cannot move information across the fold boundary. Stateful operations (group aggregates, quantile bins, target encoding) are excluded: they need fold-aware fitting and belong with the preprocessing pipelines |
+| AD-15 | The preparation job re-validates derived-feature specifications against the frame it actually loaded | the specification was checked when it was approved, but the dataset can change underneath a frozen configuration. A specification that reads the target must never be computed regardless of how it entered the config, and a refusal becomes a `HIGH` warning in the preparation report rather than a silently missing column |
 
 ## 13. Development
 

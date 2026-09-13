@@ -15,6 +15,7 @@ from ml_engine.contracts.common import (
     RequestedProblemType,
     StrictModel,
 )
+from ml_engine.contracts.proposals import FeatureProposal
 
 CONFIG_SCHEMA_VERSION = "1.0"
 DEFAULT_VALIDATION_FRACTION = 0.2
@@ -158,6 +159,13 @@ class ExperimentConfig(StrictModel):
     requested_problem_type: RequestedProblemType
     primary_metric: str
     feature_selection: FeatureSelection
+    derived_features: list[FeatureProposal] = Field(
+        default_factory=list,
+        description=(
+            "Approved derived-feature specifications, applied during preparation. Stored here "
+            "rather than as code so the run can be reproduced exactly."
+        ),
+    )
     split: SplitConfig
     preprocessing: PreprocessingConfig
     models: list[ModelSpec]
