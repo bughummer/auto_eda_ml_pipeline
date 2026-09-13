@@ -13,5 +13,5 @@ Values set here are overridden by `ML_FACTORY_*` environment variables and by `.
 deployment can change one value without editing the file. Anything left as `None` falls
 through to the next layer.
 
-Prefer an instance role over static access keys. `GET /api/v1/health` reports which credential
-source is in effect, without ever returning a credential.
+Prefer a mounted `~/.aws` profile over static access keys. `GET /api/v1/health` reports which
+credential source is in effect, without ever returning a credential.

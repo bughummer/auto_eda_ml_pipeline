@@ -345,8 +345,8 @@ Single error envelope for the whole API:
   (`backend/config.py`) from environment variables, then `.env`, then
   `config/secrets/config.py` — the last of which is gitignored and is the only place an
   operator types a credential. Secret fields are `SecretStr`, so they cannot be logged or
-  serialized by accident. An instance role is preferred over static keys; when neither is
-  configured, boto3's default chain applies unchanged.
+  serialized by accident. A mounted `~/.aws` profile is preferred over static keys; when
+  neither is configured, boto3's default chain applies unchanged.
 * The corporate proxy is configured through `HTTPS_PROXY`/`NO_PROXY` and honoured by an
   explicit botocore `Config`.
 * Bedrock input is assembled from deterministic artifacts and user-supplied documentation

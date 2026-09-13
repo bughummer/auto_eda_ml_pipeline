@@ -4,9 +4,9 @@ One place builds AWS clients, so the corporate proxy, the retry policy, the regi
 credential source are applied consistently. ``HTTPS_PROXY``/``NO_PROXY`` are honoured
 explicitly rather than relied upon.
 
-Credentials come from the standard AWS chain by default — an instance role on the corporate
-server, or ``~/.aws``. Static keys are used only when they are configured, which is the
-fallback for hosts where no role is available.
+Credentials come from the standard AWS chain by default — normally ``~/.aws`` on the
+corporate server, mounted into the container. Static keys are used only when they are
+configured, which is the fallback for hosts with no profile.
 """
 
 import logging

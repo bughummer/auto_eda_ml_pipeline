@@ -131,9 +131,9 @@ class Settings(BaseSettings):
     )
 
     # --- aws credentials --------------------------------------------------
-    # Leave these empty to use the standard AWS chain (instance role, task role or
-    # ~/.aws), which is the preferred option: nothing to rotate and nothing to leak.
-    # Set them only where a role is not available.
+    # Leave these empty to use the standard AWS chain (normally ~/.aws mounted into the
+    # container), which is the preferred option: nothing to rotate and nothing to leak.
+    # Set them only where no profile is available.
     aws_access_key_id: SecretStr | None = None
     aws_secret_access_key: SecretStr | None = None
     aws_session_token: SecretStr | None = None
@@ -197,7 +197,7 @@ class Settings(BaseSettings):
             return "static access key from configuration"
         if self.aws_profile:
             return f"shared profile {self.aws_profile!r}"
-        return "default AWS chain (instance role, task role or ~/.aws)"
+        return "default AWS chain (~/.aws, or an attached role)"
 
     @property
     def artifact_root(self) -> str:
@@ -229,7 +229,7 @@ class Settings(BaseSettings):
         if bool(self.aws_access_key_id) != bool(self.aws_secret_access_key):
             problems.append(
                 "ML_FACTORY_AWS_ACCESS_KEY_ID and ML_FACTORY_AWS_SECRET_ACCESS_KEY must be set "
-                "together, or both left empty to use the instance role"
+                "together, or both left empty to use the default AWS chain"
             )
         if not self.artifact_bucket.startswith("s3://"):
             problems.append("ML_FACTORY_ARTIFACT_BUCKET must be an s3:// URI")

@@ -26,10 +26,11 @@ LOG_LEVEL = "INFO"
 # ---------------------------------------------------------------------------
 # AWS credentials
 # ---------------------------------------------------------------------------
-# PREFERRED: leave all four of these as None and give the server an instance role,
-# or mount ~/.aws into the container. Nothing to rotate, nothing to leak.
+# PREFERRED: leave all four of these as None and mount the server's ~/.aws into the
+# container (docker-compose.yml has the line, commented out). Nothing to rotate here,
+# nothing to leak through this file.
 #
-# Use static keys only where no role is available. They must be set as a pair.
+# Use static keys only where no profile is available. They must be set as a pair.
 AWS_ACCESS_KEY_ID = None  # "AKIA..."
 AWS_SECRET_ACCESS_KEY = None  # "..."
 AWS_SESSION_TOKEN = None  # only for temporary (STS) credentials

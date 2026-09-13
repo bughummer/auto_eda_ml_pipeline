@@ -34,8 +34,8 @@ services:
       # Credentials. The directory is mounted, so it works before config.py exists;
       # config/secrets/config.py is gitignored and read-only in the container.
       - ./config/secrets:/app/config/secrets:ro
-      # Uncomment to use the server's shared AWS credentials instead of an instance role
-      # or the keys in config/secrets/config.py.
+      # Uncomment to use the server's shared AWS credentials instead of the keys in
+      # config/secrets/config.py. This is the preferred option.
       # - ${HOME}/.aws:/home/mlfactory/.aws:ro
     networks:
       - dev_network
