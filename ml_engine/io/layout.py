@@ -34,8 +34,9 @@ FAILURE_FILE = "failure.json"
 class ExperimentLayout:
     """Resolves every artifact location for one experiment.
 
-    ``base`` is an ``s3://bucket/ml-factory/experiments/<id>`` URI in AWS mode or a local
-    directory in local mode. The layout is identical either way.
+    ``base`` is an ``s3://bucket/ml-factory/experiments/<id>`` URI. Any ``ObjectStore`` can
+    resolve it, so the same layout applies to a SageMaker job, the control plane, a notebook
+    driving the engine directly, and the in-memory store used by the tests.
     """
 
     base: str
