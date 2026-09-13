@@ -64,11 +64,12 @@ There is no database. An experiment is a self-contained S3 prefix holding its re
 configuration, models, comparison and reports — copy the prefix and you have copied the
 experiment.
 
-The "corporate server" is just a host running `docker compose`; nothing about the container
-assumes on-prem. Running it on an EC2 instance is the natural AWS-native choice — the
-CloudFormation stack creates an instance profile for exactly that — and is walked through step
-by step in [`infrastructure/README.md`](infrastructure/README.md#running-docker-compose-on-aws),
-alongside the account permissions needed to deploy and to run it.
+There is no always-on AWS compute at all — not for ML, not for the control plane. The
+SageMaker jobs are *ephemeral*: AWS provisions an instance when a job starts, runs it, writes to
+S3 and destroys it, so nothing is billed between experiments. The one permanently running piece
+is this container on the corporate server, which reaches AWS over HTTPS; AWS never reaches back.
+Setting it up, and the account permissions needed to deploy, are in
+[`infrastructure/README.md`](infrastructure/README.md#running-the-control-plane).
 
 ## Deploying
 
@@ -149,11 +150,11 @@ only be read by asking for the value explicitly. The credentials file is execute
 so treat it as code: it may contain comments and helpers, and names starting with `_` are
 ignored.
 
-**Prefer an instance role.** Leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` as `None`. On
-EC2, attach the stack's `MlFactoryBackendInstanceProfile` when you launch the host — boto3's
-default chain finds it automatically and there is nothing to rotate. Off EC2, mount `~/.aws`
-into the container instead. Static keys in `config/secrets/config.py` are the fallback for
-neither of those being available, and must be set as a pair — a half-configured pair is
+**Prefer a mounted AWS profile.** If the corporate server already has `~/.aws` configured with
+a profile that assumes the stack's `MlFactoryBackendRole`, mount it read-only into the container
+and leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` as `None` — boto3's default chain finds
+it and this repository holds nothing to rotate. Static keys in `config/secrets/config.py` are
+the fallback, and must be set as a pair — a half-configured pair is
 reported by `GET /api/v1/health`, which also states which credential source is in effect
 without ever returning a credential.
 

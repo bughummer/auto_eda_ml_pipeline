@@ -179,17 +179,14 @@ Resources:
     Properties:
       RoleName: MlFactoryBackendRole
       Description: >
-        Assumed by the FastAPI control plane. It can start workflows and read artifacts, but
-        cannot create SageMaker jobs itself. Trusted two ways: as an EC2 instance profile (the
-        host running docker compose attaches this role directly, no static keys) and via
-        sts:AssumeRole from elsewhere in the account (a role assumed with STS, e.g. from a
-        non-EC2 corporate server using an instance-role-equivalent mechanism).
+        Assumed by the FastAPI control plane running on the corporate server. It can start
+        workflows and read artifacts, but cannot create SageMaker jobs itself. Trusted via
+        sts:AssumeRole from this account, so the deployment credentials the container is given
+        are an IAM principal that assumes this role rather than one carrying these permissions
+        directly.
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal: { Service: ec2.amazonaws.com }
-            Action: sts:AssumeRole
           - Effect: Allow
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: sts:AssumeRole
@@ -218,12 +215,6 @@ Resources:
               - Effect: Allow
                 Action: ['kms:Decrypt', 'kms:GenerateDataKey']
                 Resource: !GetAtt ArtifactKey.Arn
-
-  BackendInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      InstanceProfileName: MlFactoryBackendInstanceProfile
-      Roles: [!Ref BackendRole]
 
   WorkflowLogGroup:
     Type: AWS::Logs::LogGroup
@@ -291,14 +282,8 @@ Outputs:
     Description: Value for ML_FACTORY_TRAINING_STATE_MACHINE_ARN
     Value: !Ref TrainingStateMachine
   BackendRoleArn:
-    Description: Role the control plane runs as (assumed via STS, or attached as an instance profile)
+    Description: Role the control plane assumes via STS from the corporate server
     Value: !GetAtt BackendRole.Arn
-  BackendInstanceProfileName:
-    Description: >
-      Attach this instance profile when launching the EC2 host that runs docker compose, so the
-      container gets credentials from the instance metadata service with nothing to configure
-      and nothing to rotate.
-    Value: !Ref BackendInstanceProfile
   KmsKeyId:
     Description: Value for ML_FACTORY_KMS_KEY_ID
     Value: !Ref ArtifactKey
