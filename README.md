@@ -13,6 +13,7 @@ stays with the person.
 * What is built and what is deliberately deferred: [`implementation_plan.md`](implementation_plan.md)
 * Rules for working in this repository: [`AGENTS.md`](AGENTS.md)
 * AWS deployment: [`infrastructure/README.md`](infrastructure/README.md)
+* Driving the engine from a notebook: [`docs/notebook_usage.md`](docs/notebook_usage.md)
 
 ## What it does
 
@@ -197,6 +198,7 @@ frontend/         React + TypeScript + Vite + Ant Design + TanStack Query
 infrastructure/   Step Functions definitions, IAM policies, CloudFormation, the job image
 tests/            pytest suites, including the architecture boundary tests
 scripts/          local demo, sample data, OpenAPI export
+docs/             how to drive the engine directly from a notebook
 ```
 
 Dependency direction is one-way and enforced by a test:
@@ -232,6 +234,16 @@ referenced (URI, version id, etag, size), never copied.
 Reproducing a run means reading `config/experiment_config.json`: it carries the dataset
 identity, the selected and excluded features, the split configuration and seed, the
 preprocessing configuration, every hyperparameter and the package versions used.
+
+## Using the engine directly
+
+The platform is the front door, not the only door. `ml_engine` is an ordinary Python package and
+the job entrypoints are ordinary functions, so a notebook can run the same profiling, the same
+leakage rules and the same training against the same bucket — useful for the run that does not
+fit the standard flow. Write an `ExperimentDefinition` alongside the artifacts and that run
+shows up in the UI like any other. See
+[`docs/notebook_usage.md`](docs/notebook_usage.md); every snippet in it is executed by
+`tests/test_notebook_recipes.py`.
 
 ## Adding a model
 
