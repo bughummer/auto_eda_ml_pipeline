@@ -27,9 +27,10 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { ApiError } from '../api/client';
-import { useFeatureReview, useSaveFeatures, useUploadDictionary } from '../api/hooks';
+import { useFeatureReview, useHealth, useSaveFeatures, useUploadDictionary } from '../api/hooks';
 import type { FeatureReviewItem, LeakageRiskLevel } from '../api/types';
 import { QueryState } from '../components/common';
+import { DerivedFeaturePanel } from '../components/DerivedFeaturePanel';
 import { RISK_COLORS, RISK_LABELS, formatPercent, humanize } from '../lib/format';
 
 const EXCLUSION_ACTIONS = new Set(['consider_excluding', 'strongly_consider_excluding']);
@@ -43,6 +44,7 @@ export function FeatureReviewTab({
 }) {
   const { message } = AntApp.useApp();
   const { data, isLoading, error } = useFeatureReview(experimentId, root);
+  const { data: health } = useHealth();
   const isReadOnly = Boolean(root);
   const save = useSaveFeatures(experimentId);
   const uploadDictionary = useUploadDictionary(experimentId);
@@ -149,6 +151,12 @@ export function FeatureReviewTab({
               </Upload.Dragger>
             </Col>
           </Row>
+
+          <DerivedFeaturePanel
+            experimentId={experimentId}
+            enabled={Boolean(health?.bedrock_enabled)}
+            readOnly={isReadOnly}
+          />
 
           {flaggedSelected.length > 0 && (
             <Alert

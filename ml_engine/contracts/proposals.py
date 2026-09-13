@@ -131,6 +131,7 @@ FeatureProposal = Annotated[
 
 
 class ProposalRejection(StrEnum):
+    MALFORMED_SPECIFICATION = "malformed_specification"
     INVALID_NAME = "invalid_name"
     DUPLICATE_NAME = "duplicate_name"
     NAME_ALREADY_IN_DATASET = "name_already_in_dataset"
@@ -145,7 +146,9 @@ class RejectedProposal(StrictModel):
     """A proposal that will not be computed, and why. Shown to the reviewer, never silent."""
 
     name: str
-    op: FeatureOp
+    op: FeatureOp | None = Field(
+        default=None, description="Null when the specification did not parse as any operation."
+    )
     reason: ProposalRejection
     message: str
 
@@ -173,5 +176,25 @@ class FeatureProposalReport(StrictModel):
         default=None,
         description="Model id that produced the proposals; null when they were written by hand.",
     )
-    accepted: list[FeatureProposal] = Field(default_factory=list)
-    rejected: list[RejectedProposal] = Field(default_factory=list)
+    candidates: list[FeatureProposal] = Field(
+        default_factory=list,
+        description="Specifications that passed validation and are offered for review.",
+    )
+    rejected: list[RejectedProposal] = Field(
+        default_factory=list, description="Specifications refused before anyone saw them, and why."
+    )
+    approved_names: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The candidates a person approved. Validation decides what may be offered; this "
+            "decides what is used. Empty until someone chooses."
+        ),
+    )
+    decided_at: datetime | None = None
+    decided_by: str | None = None
+
+    @property
+    def approved(self) -> list[FeatureProposal]:
+        """The approved candidates, in the order they were proposed."""
+        chosen = set(self.approved_names)
+        return [candidate for candidate in self.candidates if candidate.name in chosen]

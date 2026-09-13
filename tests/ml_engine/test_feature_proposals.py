@@ -23,6 +23,7 @@ from ml_engine.contracts.proposals import (
 )
 from ml_engine.features import (
     apply_proposals,
+    column_types_from_frame,
     derivation_warnings,
     source_columns,
     validate_proposals,
@@ -69,7 +70,9 @@ def _ratio(
 
 def test_a_feature_built_on_the_target_is_refused(frame):
     accepted, rejected = validate_proposals(
-        [_ratio(numerator=TARGET, denominator="tenure_months")], frame, target_column=TARGET
+        [_ratio(numerator=TARGET, denominator="tenure_months")],
+        column_types_from_frame(frame),
+        target_column=TARGET,
     )
 
     assert accepted == []
@@ -92,7 +95,9 @@ def test_the_target_is_refused_in_every_input_position(frame):
         ),
     ]
 
-    accepted, rejected = validate_proposals(proposals, frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        proposals, column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert {r.reason for r in rejected} == {ProposalRejection.TARGET_REFERENCE}
@@ -100,7 +105,7 @@ def test_the_target_is_refused_in_every_input_position(frame):
 
 def test_an_unknown_column_is_refused(frame):
     accepted, rejected = validate_proposals(
-        [_ratio(denominator="lifetime_value")], frame, target_column=TARGET
+        [_ratio(denominator="lifetime_value")], column_types_from_frame(frame), target_column=TARGET
     )
 
     assert accepted == []
@@ -109,7 +114,7 @@ def test_an_unknown_column_is_refused(frame):
 
 def test_arithmetic_on_a_non_numeric_column_is_refused(frame):
     accepted, rejected = validate_proposals(
-        [_ratio(numerator="country")], frame, target_column=TARGET
+        [_ratio(numerator="country")], column_types_from_frame(frame), target_column=TARGET
     )
 
     assert accepted == []
@@ -119,7 +124,7 @@ def test_arithmetic_on_a_non_numeric_column_is_refused(frame):
 def test_a_boolean_is_not_treated_as_a_measurement(frame):
     """Booleans are numeric to pandas. Dividing by one is not arithmetic anybody wanted."""
     accepted, rejected = validate_proposals(
-        [_ratio(denominator="is_business")], frame, target_column=TARGET
+        [_ratio(denominator="is_business")], column_types_from_frame(frame), target_column=TARGET
     )
 
     assert accepted == []
@@ -135,7 +140,9 @@ def test_a_date_difference_over_non_dates_is_refused(frame):
         available_at_prediction_time=True,
     )
 
-    accepted, rejected = validate_proposals([proposal], frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [proposal], column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert rejected[0].reason is ProposalRejection.WRONG_COLUMN_TYPE
@@ -150,7 +157,9 @@ def test_mapping_a_numeric_column_is_refused(frame):
         available_at_prediction_time=True,
     )
 
-    accepted, rejected = validate_proposals([proposal], frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [proposal], column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert rejected[0].reason is ProposalRejection.WRONG_COLUMN_TYPE
@@ -165,14 +174,18 @@ def test_an_empty_mapping_is_refused(frame):
         available_at_prediction_time=True,
     )
 
-    accepted, rejected = validate_proposals([proposal], frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [proposal], column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert rejected[0].reason is ProposalRejection.EMPTY_MAPPING
 
 
 def test_a_name_that_already_exists_is_refused(frame):
-    accepted, rejected = validate_proposals([_ratio(name="balance")], frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [_ratio(name="balance")], column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert rejected[0].reason is ProposalRejection.NAME_ALREADY_IN_DATASET
@@ -180,7 +193,9 @@ def test_a_name_that_already_exists_is_refused(frame):
 
 def test_two_proposals_cannot_claim_the_same_name(frame):
     accepted, rejected = validate_proposals(
-        [_ratio(), _ratio(numerator="balance")], frame, target_column=TARGET
+        [_ratio(), _ratio(numerator="balance")],
+        column_types_from_frame(frame),
+        target_column=TARGET,
     )
 
     assert len(accepted) == 1
@@ -189,7 +204,9 @@ def test_two_proposals_cannot_claim_the_same_name(frame):
 
 @pytest.mark.parametrize("name", ["", "2_fast", "spend rate", "spend-rate", "drop table"])
 def test_an_unusable_column_name_is_refused(frame, name):
-    accepted, rejected = validate_proposals([_ratio(name=name)], frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [_ratio(name=name)], column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert accepted == []
     assert rejected[0].reason is ProposalRejection.INVALID_NAME
@@ -198,7 +215,9 @@ def test_an_unusable_column_name_is_refused(frame, name):
 def test_the_proposal_count_is_capped(frame):
     proposals = [_ratio(name=f"feature_{i}") for i in range(MAX_PROPOSALS + 3)]
 
-    accepted, rejected = validate_proposals(proposals, frame, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        proposals, column_types_from_frame(frame), target_column=TARGET
+    )
 
     assert len(accepted) == MAX_PROPOSALS
     assert len(rejected) == 3
@@ -207,7 +226,9 @@ def test_the_proposal_count_is_capped(frame):
 
 def test_one_bad_proposal_does_not_discard_the_good_ones(frame):
     accepted, rejected = validate_proposals(
-        [_ratio(), _ratio(name="leak", numerator=TARGET)], frame, target_column=TARGET
+        [_ratio(), _ratio(name="leak", numerator=TARGET)],
+        column_types_from_frame(frame),
+        target_column=TARGET,
     )
 
     assert [p.name for p in accepted] == ["charges_per_month"]
@@ -285,7 +306,9 @@ def test_date_difference_accepts_dates_stored_as_strings(frame):
         available_at_prediction_time=True,
     )
 
-    accepted, rejected = validate_proposals([proposal], as_text, target_column=TARGET)
+    accepted, rejected = validate_proposals(
+        [proposal], column_types_from_frame(as_text), target_column=TARGET
+    )
     result, _ = apply_proposals(as_text, accepted)
 
     assert rejected == []
@@ -407,3 +430,32 @@ def test_an_all_null_derived_column_is_warned_about(frame):
     warnings = derivation_warnings(derived, row_count=len(empty))
 
     assert [w.rule for w in warnings] == ["derived_feature_all_null"]
+
+
+# --- the two ways of describing columns ------------------------------------------
+
+
+def test_the_profile_and_the_frame_describe_columns_identically(classification_frame):
+    """A proposal accepted when it is offered must not be refused later on type grounds.
+
+    Validation runs twice — against the EDA report when a proposal is offered, and against the
+    dataframe in preparation. They must agree, or the platform would show a reviewer a feature
+    it was never going to build.
+    """
+    from ml_engine.features import column_types_from_eda
+    from ml_engine.profiling import profile_dataset
+
+    eda = profile_dataset(
+        classification_frame,
+        experiment_id="exp-test",
+        target_column="churned",
+        source_uri="memory://frame",
+        file_format="csv",
+    )
+
+    from_frame = column_types_from_frame(classification_frame)
+    from_profile = column_types_from_eda(eda)
+
+    assert from_profile.names == from_frame.names
+    assert from_profile.arithmetic == from_frame.arithmetic
+    assert from_profile.date_like == from_frame.date_like

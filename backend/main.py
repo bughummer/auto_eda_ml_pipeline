@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes import dictionary, experiments, health, models, reasoning
+from backend.api.routes import dictionary, experiments, health, models, proposals, reasoning
 from backend.config import Settings, get_settings
 from backend.container import AppContainer, build_container
 from backend.errors import register_error_handlers
@@ -92,6 +92,7 @@ def create_app(
     app.include_router(experiments.router, prefix=settings.api_prefix)
     app.include_router(dictionary.router, prefix=settings.api_prefix)
     app.include_router(reasoning.router, prefix=settings.api_prefix)
+    app.include_router(proposals.router, prefix=settings.api_prefix)
 
     if settings.static_dir is not None:
         mount_frontend(app, settings.static_dir)

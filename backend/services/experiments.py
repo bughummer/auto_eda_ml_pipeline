@@ -57,6 +57,7 @@ from ml_engine.contracts.eda import EdaReport
 from ml_engine.contracts.experiment import ExperimentDefinition, ExperimentRecord
 from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.contracts.model import ModelFailure, ModelMetadata
+from ml_engine.contracts.proposals import FeatureProposal, FeatureProposalReport
 from ml_engine.evaluation import resolve_primary_metric, selectable_primary_metrics
 from ml_engine.evaluation.metrics import UnknownMetricError
 from ml_engine.io import (
@@ -391,6 +392,7 @@ class ExperimentService:
             requested_problem_type=requested,
             primary_metric=primary_metric,
             feature_selection=selection,
+            derived_features=self._approved_derived_features(layout),
             split=request.to_split_config(),
             preprocessing=request.preprocessing or PreprocessingConfig(),
             models=models,
@@ -491,6 +493,16 @@ class ExperimentService:
     def _stored_selection(self, record: ExperimentRecord) -> FeatureSelection | None:
         layout = ExperimentLayout(base=record.artifact_prefix)
         return read_model_if_exists(self._store, layout.selected_features, FeatureSelection)
+
+    def _approved_derived_features(self, layout: ExperimentLayout) -> list[FeatureProposal]:
+        """Only what a person approved is frozen into the configuration.
+
+        A proposal that was offered but not approved leaves no trace in the run: the report
+        keeps the full record of what was suggested, the configuration carries only the
+        decision.
+        """
+        report = read_model_if_exists(self._store, layout.feature_proposals, FeatureProposalReport)
+        return report.approved if report is not None else []
 
     def _resolve_problem_type(self, requested: RequestedProblemType, eda: EdaReport) -> ProblemType:
         if requested is not RequestedProblemType.AUTO:

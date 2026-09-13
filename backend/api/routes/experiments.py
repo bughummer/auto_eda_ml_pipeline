@@ -132,10 +132,12 @@ def start_training(
     user: CurrentUserDep,
 ) -> StartTrainingResponse:
     record = service.start_training(experiment_id, request, user)
+    # The models are the ones the control plane requested. Per-model run state belongs to the
+    # workflow and is read from /training-status, not invented here.
     return StartTrainingResponse(
         experiment_id=record.experiment_id,
         status=record.status,
-        models=sorted(record.model_statuses),
+        models=list(record.requested_models),
     )
 
 

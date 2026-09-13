@@ -70,6 +70,21 @@
         "title": "AnalysisWarning",
         "type": "object"
       },
+      "ApproveProposalsRequest": {
+        "additionalProperties": false,
+        "description": "The candidates a person chose. An empty list means 'none of them', and is respected.",
+        "properties": {
+          "approved_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved Names",
+            "type": "array"
+          }
+        },
+        "title": "ApproveProposalsRequest",
+        "type": "object"
+      },
       "Body_upload_data_dictionary_api_v1_experiments__experiment_id__data_dictionary_post": {
         "properties": {
           "file": {
@@ -887,6 +902,63 @@
         "title": "DatasetSummary",
         "type": "object"
       },
+      "DateDifferenceProposal": {
+        "additionalProperties": false,
+        "description": "Elapsed time between two date columns of the dataset.\n\nBoth endpoints are columns. There is deliberately no \"difference from today\": that would\nproduce a different value on every run and make the experiment irreproducible.",
+        "properties": {
+          "available_at_prediction_time": {
+            "description": "Whether every input is known when a prediction would actually be made. The proposer states its assumption; a human confirms it. No dictionary can settle this, and getting it wrong is how a good validation score fails in production.",
+            "title": "Available At Prediction Time",
+            "type": "boolean"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the derived column. Must not already exist.",
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "const": "date_difference",
+            "default": "date_difference",
+            "title": "Op",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this feature should help. Shown to the reviewer.",
+            "title": "Rationale",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/DateUnit",
+            "default": "days"
+          }
+        },
+        "required": [
+          "name",
+          "rationale",
+          "available_at_prediction_time",
+          "start",
+          "end"
+        ],
+        "title": "DateDifferenceProposal",
+        "type": "object"
+      },
+      "DateUnit": {
+        "enum": [
+          "days",
+          "months",
+          "years"
+        ],
+        "title": "DateUnit",
+        "type": "string"
+      },
       "DatetimeStats": {
         "additionalProperties": false,
         "properties": {
@@ -932,6 +1004,50 @@
           "range_days"
         ],
         "title": "DatetimeStats",
+        "type": "object"
+      },
+      "DifferenceProposal": {
+        "additionalProperties": false,
+        "description": "``left - right`` \u2014 gaps, headroom, unused allowance.",
+        "properties": {
+          "available_at_prediction_time": {
+            "description": "Whether every input is known when a prediction would actually be made. The proposer states its assumption; a human confirms it. No dictionary can settle this, and getting it wrong is how a good validation score fails in production.",
+            "title": "Available At Prediction Time",
+            "type": "boolean"
+          },
+          "left": {
+            "title": "Left",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the derived column. Must not already exist.",
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "const": "difference",
+            "default": "difference",
+            "title": "Op",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this feature should help. Shown to the reviewer.",
+            "title": "Rationale",
+            "type": "string"
+          },
+          "right": {
+            "title": "Right",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rationale",
+          "available_at_prediction_time",
+          "left",
+          "right"
+        ],
+        "title": "DifferenceProposal",
         "type": "object"
       },
       "EdaReport": {
@@ -1077,6 +1193,40 @@
           },
           "dataset": {
             "$ref": "#/components/schemas/DatasetReference"
+          },
+          "derived_features": {
+            "description": "Approved derived-feature specifications, applied during preparation. Stored here rather than as code so the run can be reproduced exactly.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "date_difference": "#/components/schemas/DateDifferenceProposal",
+                  "difference": "#/components/schemas/DifferenceProposal",
+                  "is_missing": "#/components/schemas/IsMissingProposal",
+                  "map_categories": "#/components/schemas/MapCategoriesProposal",
+                  "ratio": "#/components/schemas/RatioProposal"
+                },
+                "propertyName": "op"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RatioProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/DifferenceProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/DateDifferenceProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/MapCategoriesProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/IsMissingProposal"
+                }
+              ]
+            },
+            "title": "Derived Features",
+            "type": "array"
           },
           "environment": {
             "$ref": "#/components/schemas/EnvironmentCapture"
@@ -1577,6 +1727,128 @@
         "title": "FeatureInterpretation",
         "type": "object"
       },
+      "FeatureOp": {
+        "enum": [
+          "ratio",
+          "difference",
+          "date_difference",
+          "map_categories",
+          "is_missing"
+        ],
+        "title": "FeatureOp",
+        "type": "string"
+      },
+      "FeatureProposalReport": {
+        "additionalProperties": false,
+        "description": "Everything proposed for one experiment and what happened to it.",
+        "properties": {
+          "approved_names": {
+            "description": "The candidates a person approved. Validation decides what may be offered; this decides what is used. Empty until someone chooses.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved Names",
+            "type": "array"
+          },
+          "candidates": {
+            "description": "Specifications that passed validation and are offered for review.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "date_difference": "#/components/schemas/DateDifferenceProposal",
+                  "difference": "#/components/schemas/DifferenceProposal",
+                  "is_missing": "#/components/schemas/IsMissingProposal",
+                  "map_categories": "#/components/schemas/MapCategoriesProposal",
+                  "ratio": "#/components/schemas/RatioProposal"
+                },
+                "propertyName": "op"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RatioProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/DifferenceProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/DateDifferenceProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/MapCategoriesProposal"
+                },
+                {
+                  "$ref": "#/components/schemas/IsMissingProposal"
+                }
+              ]
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model id that produced the proposals; null when they were written by hand.",
+            "title": "Proposed By"
+          },
+          "rejected": {
+            "description": "Specifications refused before anyone saw them, and why.",
+            "items": {
+              "$ref": "#/components/schemas/RejectedProposal"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "generated_at"
+        ],
+        "title": "FeatureProposalReport",
+        "type": "object"
+      },
       "FeatureReviewItem": {
         "additionalProperties": false,
         "description": "One row of the feature review table: profile, risk and the platform's recommendation.",
@@ -1923,6 +2195,45 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "IsMissingProposal": {
+        "additionalProperties": false,
+        "description": "Flag whether a column is missing.\n\nMissingness that predicts the outcome is already a leakage finding; this turns the pattern\ninto an explicit feature, so the derived column is screened like any other.",
+        "properties": {
+          "available_at_prediction_time": {
+            "description": "Whether every input is known when a prediction would actually be made. The proposer states its assumption; a human confirms it. No dictionary can settle this, and getting it wrong is how a good validation score fails in production.",
+            "title": "Available At Prediction Time",
+            "type": "boolean"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the derived column. Must not already exist.",
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "const": "is_missing",
+            "default": "is_missing",
+            "title": "Op",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this feature should help. Shown to the reviewer.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rationale",
+          "available_at_prediction_time",
+          "column"
+        ],
+        "title": "IsMissingProposal",
+        "type": "object"
+      },
       "LeakageFinding": {
         "additionalProperties": false,
         "properties": {
@@ -2051,6 +2362,65 @@
         ],
         "title": "LeakageRiskLevel",
         "type": "string"
+      },
+      "MapCategoriesProposal": {
+        "additionalProperties": false,
+        "description": "Group category values by documented meaning \u2014 country to region, code to family.\n\nThis is the operation a data dictionary actually unlocks: the mapping comes from what the\nvalues *mean*, which no statistic in the profile can supply.",
+        "properties": {
+          "available_at_prediction_time": {
+            "description": "Whether every input is known when a prediction would actually be made. The proposer states its assumption; a human confirms it. No dictionary can settle this, and getting it wrong is how a good validation score fails in production.",
+            "title": "Available At Prediction Time",
+            "type": "boolean"
+          },
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Group for values absent from the mapping; null leaves them missing.",
+            "title": "Default"
+          },
+          "mapping": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Mapping",
+            "type": "object"
+          },
+          "name": {
+            "description": "Name of the derived column. Must not already exist.",
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "const": "map_categories",
+            "default": "map_categories",
+            "title": "Op",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this feature should help. Shown to the reviewer.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rationale",
+          "available_at_prediction_time",
+          "column",
+          "mapping"
+        ],
+        "title": "MapCategoriesProposal",
+        "type": "object"
       },
       "MetricDirection": {
         "enum": [
@@ -2973,6 +3343,55 @@
         "title": "ProblemType",
         "type": "string"
       },
+      "ProposalRejection": {
+        "enum": [
+          "malformed_specification",
+          "invalid_name",
+          "duplicate_name",
+          "name_already_in_dataset",
+          "unknown_column",
+          "target_reference",
+          "wrong_column_type",
+          "empty_mapping",
+          "limit_exceeded"
+        ],
+        "title": "ProposalRejection",
+        "type": "string"
+      },
+      "ProposeFeaturesRequest": {
+        "additionalProperties": false,
+        "description": "Business context the profile cannot supply. Both fields are optional but both help.",
+        "properties": {
+          "prediction_timing": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the prediction is made relative to the outcome. This is what lets the model judge whether a proposed feature would be known at that moment.",
+            "title": "Prediction Timing"
+          },
+          "target_definition": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the target actually means in business terms.",
+            "title": "Target Definition"
+          }
+        },
+        "title": "ProposeFeaturesRequest",
+        "type": "object"
+      },
       "ProposedExperiment": {
         "additionalProperties": false,
         "description": "A proposal only. A human starts the next experiment in v1.0.",
@@ -3009,6 +3428,54 @@
           "expected_insight"
         ],
         "title": "ProposedExperiment",
+        "type": "object"
+      },
+      "RatioProposal": {
+        "additionalProperties": false,
+        "description": "``numerator / denominator`` \u2014 per-unit, per-month, per-capita quantities.",
+        "properties": {
+          "available_at_prediction_time": {
+            "description": "Whether every input is known when a prediction would actually be made. The proposer states its assumption; a human confirms it. No dictionary can settle this, and getting it wrong is how a good validation score fails in production.",
+            "title": "Available At Prediction Time",
+            "type": "boolean"
+          },
+          "denominator": {
+            "title": "Denominator",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the derived column. Must not already exist.",
+            "title": "Name",
+            "type": "string"
+          },
+          "numerator": {
+            "title": "Numerator",
+            "type": "string"
+          },
+          "on_zero_denominator": {
+            "$ref": "#/components/schemas/ZeroDenominatorPolicy",
+            "default": "null"
+          },
+          "op": {
+            "const": "ratio",
+            "default": "ratio",
+            "title": "Op",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this feature should help. Shown to the reviewer.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rationale",
+          "available_at_prediction_time",
+          "numerator",
+          "denominator"
+        ],
+        "title": "RatioProposal",
         "type": "object"
       },
       "ReasoningReport": {
@@ -3171,6 +3638,41 @@
         ],
         "title": "RecommendedAction",
         "type": "string"
+      },
+      "RejectedProposal": {
+        "additionalProperties": false,
+        "description": "A proposal that will not be computed, and why. Shown to the reviewer, never silent.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureOp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the specification did not parse as any operation."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ProposalRejection"
+          }
+        },
+        "required": [
+          "name",
+          "reason",
+          "message"
+        ],
+        "title": "RejectedProposal",
+        "type": "object"
       },
       "RequestedProblemType": {
         "description": "What the user may ask for. ``auto`` is resolved during profiling.",
@@ -3754,6 +4256,15 @@
         ],
         "title": "WarningCategory",
         "type": "string"
+      },
+      "ZeroDenominatorPolicy": {
+        "description": "What a ratio does where the denominator is zero. Never silently infinite.",
+        "enum": [
+          "null",
+          "zero"
+        ],
+        "title": "ZeroDenominatorPolicy",
+        "type": "string"
       }
     }
   },
@@ -4229,6 +4740,166 @@
         "summary": "Get Eda",
         "tags": [
           "experiments"
+        ]
+      }
+    },
+    "/api/v1/experiments/{experiment_id}/feature-proposals": {
+      "get": {
+        "operationId": "get_feature_proposals_api_v1_experiments__experiment_id__feature_proposals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureProposalReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Feature Proposals",
+        "tags": [
+          "feature proposals"
+        ]
+      },
+      "post": {
+        "description": "Ask for derived-feature specifications. Nothing is used until someone approves it.",
+        "operationId": "propose_features_api_v1_experiments__experiment_id__feature_proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeFeaturesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureProposalReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Features",
+        "tags": [
+          "feature proposals"
+        ]
+      },
+      "put": {
+        "description": "Record which proposals a person approved. Only these are frozen into the run.",
+        "operationId": "approve_feature_proposals_api_v1_experiments__experiment_id__feature_proposals_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Remote-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Remote-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveProposalsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureProposalReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Feature Proposals",
+        "tags": [
+          "feature proposals"
         ]
       }
     },

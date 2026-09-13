@@ -117,6 +117,32 @@ def test_training_requires_a_confirmed_feature_selection(client, dataset_csv):
     assert response.json()["error"]["code"] == "INVALID_STATE"
 
 
+def test_starting_training_returns_the_requested_models(client, container, dataset_csv):
+    """The success path, over HTTP.
+
+    Only the 409 branch of this route was covered before, so a response built from a record
+    field that no longer existed went unnoticed while the service beneath it worked fine.
+    """
+    experiment_id = client.post(
+        "/api/v1/experiments",
+        json={"name": "x", "dataset_uri": dataset_csv, "target_column": "churned"},
+    ).json()["experiment_id"]
+    container.orchestrator.wait_for_idle(timeout=300)
+    client.put(
+        f"/api/v1/experiments/{experiment_id}/features",
+        json={"selected_features": ["tenure_months", "monthly_charges"], "exclusion_reasons": {}},
+    )
+
+    response = client.post(
+        f"/api/v1/experiments/{experiment_id}/training", json={"models": ["logistic_regression"]}
+    )
+
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["experiment_id"] == experiment_id
+    assert body["models"] == ["logistic_regression"]
+
+
 def test_reasoning_is_disabled_without_bedrock(client, dataset_csv):
     experiment_id = client.post(
         "/api/v1/experiments",

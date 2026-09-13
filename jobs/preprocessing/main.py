@@ -20,7 +20,12 @@ from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.contracts.preparation import PreparationReport
 from ml_engine.contracts.proposals import DerivedFeature, RejectedProposal
 from ml_engine.contracts.warnings import AnalysisWarning, sort_warnings
-from ml_engine.features import apply_proposals, derivation_warnings, validate_proposals
+from ml_engine.features import (
+    apply_proposals,
+    column_types_from_frame,
+    derivation_warnings,
+    validate_proposals,
+)
 from ml_engine.io import (
     ExperimentLayout,
     ObjectStore,
@@ -184,7 +189,9 @@ def _derive_features(
         return frame, [], [], None
 
     accepted, rejected = validate_proposals(
-        config.derived_features, frame, target_column=config.target_column
+        config.derived_features,
+        column_types_from_frame(frame),
+        target_column=config.target_column,
     )
     for refusal in rejected:
         warnings.append(

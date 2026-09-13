@@ -32,7 +32,13 @@ stays with the person.
    one job per model so a single failure cannot lose the rest of the experiment.
 5. **Comparison** — direction-aware ranking on a chosen primary metric, per-model metrics,
    confusion matrices, feature importance and failure reasons.
-6. **Semantic analysis** (optional) — Bedrock reads the deterministic artifacts and any
+6. **Derived-feature proposals** (optional) — Bedrock reads the profile and the attached data
+   dictionary and proposes features from a **closed vocabulary of five row-wise operations**:
+   ratio, difference, date difference, category mapping and missingness flag. It returns
+   specifications, never code, so every suggestion is checked before anyone sees it — one that
+   reads the target, names a column that does not exist or misuses a type is refused with the
+   reason shown. Nothing is computed until a person approves it, and approving none is normal.
+7. **Semantic analysis** (optional) — Bedrock reads the deterministic artifacts and any
    attached column documentation and interprets them. It never computes a number and never
    changes a result.
 
@@ -41,6 +47,7 @@ stays with the person.
 | Rule | Why |
 |---|---|
 | The LLM never computes a statistic, metric or ranking | numbers must be reproducible and auditable |
+| The LLM proposes specifications, never code | a specification can be validated before it runs and reproduced from the frozen config |
 | Learned transforms fit on the training fold only | anything else quietly inflates validation scores |
 | The browser never calls AWS | one control plane, one audit point, no credentials in a tab |
 | Step Functions owns workflow state | the backend and UI report it, they never invent it |

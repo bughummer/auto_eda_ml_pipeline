@@ -20,6 +20,7 @@ import type {
   EdaReport,
   ExperimentListResponse,
   ExperimentStatus,
+  FeatureProposalReport,
   FeatureReviewResponse,
   HealthResponse,
   LeakageReport,
@@ -180,6 +181,39 @@ export function useReasoning(id: string, enabled: boolean) {
   return useQuery(
     artifactQuery<ReasoningReport>(keys.artifact(id, undefined, 'reasoning'), `/experiments/${id}/reasoning`, enabled),
   );
+}
+
+/**
+ * Proposed derived features. Unlike the other artifact queries this one does not poll: a
+ * proposal set only appears because somebody asked for one, so waiting for it is pointless.
+ */
+export function useFeatureProposals(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.artifact(id, undefined, 'feature-proposals'),
+    queryFn: () => api.get<FeatureProposalReport>(`/experiments/${id}/feature-proposals`),
+    enabled,
+    retry: retryUnlessMissing,
+  });
+}
+
+export function useProposeFeatures(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { target_definition?: string; prediction_timing?: string }) =>
+      api.post<FeatureProposalReport>(`/experiments/${id}/feature-proposals`, body),
+    onSuccess: (report) =>
+      queryClient.setQueryData(keys.artifact(id, undefined, 'feature-proposals'), report),
+  });
+}
+
+export function useApproveProposals(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (approved_names: string[]) =>
+      api.put<FeatureProposalReport>(`/experiments/${id}/feature-proposals`, { approved_names }),
+    onSuccess: (report) =>
+      queryClient.setQueryData(keys.artifact(id, undefined, 'feature-proposals'), report),
+  });
 }
 
 export function useCreateExperiment() {

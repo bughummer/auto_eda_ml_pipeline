@@ -49,8 +49,12 @@ def derived_dataset(store) -> str:
         {
             "monthly_charges": [40.0 + (i % 50) for i in range(rows)],
             "tenure_months": [float(i % 24) for i in range(rows)],
+            # A constant column, for a proposal that is refused before types are checked.
             "zeros": [0] * rows,
-            "leak_source": [i % 2 for i in range(rows)],
+            # Two ordinary-looking numeric columns whose difference happens to be the
+            # outcome. Neither is binary, so neither is suspicious on its own.
+            "score_after": [(i % 5) + (i % 2) for i in range(rows)],
+            "score_before": [i % 5 for i in range(rows)],
             "notes": [None if i % 5 == 0 else f"note {i}" for i in range(rows)],
             "churned": [i % 2 for i in range(rows)],
         }
@@ -181,8 +185,8 @@ def test_a_derived_column_that_reproduces_the_target_is_caught_by_screening(
 ):
     leak = DifferenceProposal(
         name="reconstructed_target",
-        left="leak_source",
-        right="zeros",
+        left="score_after",
+        right="score_before",
         rationale="a plausible-looking difference that happens to be the outcome",
         available_at_prediction_time=True,
     )
@@ -205,8 +209,8 @@ def test_a_derived_feature_is_not_excluded_on_its_own(store, layout, derived_dat
     """Screening reports; it never silently drops. The decision stays with the data scientist."""
     leak = DifferenceProposal(
         name="reconstructed_target",
-        left="leak_source",
-        right="zeros",
+        left="score_after",
+        right="score_before",
         rationale="r",
         available_at_prediction_time=True,
     )

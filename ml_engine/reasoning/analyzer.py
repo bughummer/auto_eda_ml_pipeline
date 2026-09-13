@@ -6,9 +6,7 @@ Three guarantees enforced here, not merely requested in the prompt:
 3. nothing in the result can change an experiment — the report is read-only output.
 """
 
-import json
 import logging
-import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,15 +19,10 @@ from ml_engine.contracts.leakage import LeakageReport
 from ml_engine.contracts.reasoning import ReasoningReport
 from ml_engine.reasoning.client import ReasoningClient, ReasoningUnavailableError
 from ml_engine.reasoning.context import build_context, referenced_columns
+from ml_engine.reasoning.json_io import ReasoningOutputError, parse_json_object
 from ml_engine.reasoning.prompts import SYSTEM_PROMPT, build_user_prompt
 
 LOGGER = logging.getLogger("ml_factory.reasoning")
-
-_JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
-
-
-class ReasoningOutputError(RuntimeError):
-    """Raised when the model's output cannot be validated against the schema."""
 
 
 def run_reasoning(
@@ -54,30 +47,9 @@ def run_reasoning(
         prediction_timing=prediction_timing,
     )
     raw = client.invoke(SYSTEM_PROMPT, build_user_prompt(context, question))
-    payload = _parse_json(raw)
+    payload = parse_json_object(raw)
     report = _validate(payload, experiment_id=experiment_id, model_id=client.model_id)
     return _drop_unknown_columns(report, referenced_columns(context))
-
-
-def _parse_json(raw: str) -> dict[str, Any]:
-    text = (raw or "").strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.split("\n", 1)[1] if "\n" in text else text
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        match = _JSON_BLOCK.search(text)
-        if not match:
-            raise ReasoningOutputError(
-                "The reasoning model did not return JSON. The analysis was discarded."
-            ) from None
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise ReasoningOutputError(
-                f"The reasoning model returned malformed JSON: {exc}. The analysis was discarded."
-            ) from exc
 
 
 def _validate(payload: dict[str, Any], *, experiment_id: str, model_id: str) -> ReasoningReport:

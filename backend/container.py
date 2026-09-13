@@ -13,6 +13,7 @@ from backend.orchestration import ExperimentOrchestrator, StepFunctionsOrchestra
 from backend.repositories import ExperimentRepository, ObjectStoreExperimentRepository
 from backend.services.dictionary import DataDictionaryService
 from backend.services.experiments import ExperimentService
+from backend.services.proposals import FeatureProposalService
 from backend.services.reasoning import ReasoningService
 from ml_engine.io import ObjectStore, S3ObjectStore
 
@@ -28,6 +29,7 @@ class AppContainer:
     experiments: ExperimentService
     dictionary: DataDictionaryService
     reasoning: ReasoningService
+    proposals: FeatureProposalService
 
     def shutdown(self) -> None:
         shutdown = getattr(self.orchestrator, "shutdown", None)
@@ -69,11 +71,12 @@ def build_container(
         settings=settings, repository=repository, store=store, orchestrator=orchestrator
     )
     dictionary = DataDictionaryService(settings=settings, repository=repository, store=store)
+    reasoning_client = _build_reasoning_client(settings)
     reasoning = ReasoningService(
-        settings=settings,
-        repository=repository,
-        store=store,
-        client=_build_reasoning_client(settings),
+        settings=settings, repository=repository, store=store, client=reasoning_client
+    )
+    proposals = FeatureProposalService(
+        settings=settings, repository=repository, store=store, client=reasoning_client
     )
     LOGGER.info("ML Factory container built (artifact root %s)", settings.artifact_root)
     return AppContainer(
@@ -84,6 +87,7 @@ def build_container(
         experiments=experiments,
         dictionary=dictionary,
         reasoning=reasoning,
+        proposals=proposals,
     )
 
 

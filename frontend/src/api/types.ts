@@ -420,3 +420,68 @@ export interface ExperimentListResponse {
 export interface ApiErrorBody {
   error: { code: string; message: string; details: Record<string, unknown>; request_id: string | null };
 }
+
+/**
+ * A derived-feature specification. The union is discriminated by `op`, exactly as the backend
+ * contract is: the frontend renders whichever fields the operation carries and never has to
+ * interpret a free-form expression, because none exists.
+ */
+export type FeatureOp = 'ratio' | 'difference' | 'date_difference' | 'map_categories' | 'is_missing';
+
+interface ProposalBase {
+  name: string;
+  rationale: string;
+  available_at_prediction_time: boolean;
+}
+
+export type FeatureProposal =
+  | (ProposalBase & {
+      op: 'ratio';
+      numerator: string;
+      denominator: string;
+      on_zero_denominator: 'null' | 'zero';
+    })
+  | (ProposalBase & { op: 'difference'; left: string; right: string })
+  | (ProposalBase & {
+      op: 'date_difference';
+      start: string;
+      end: string;
+      unit: 'days' | 'months' | 'years';
+    })
+  | (ProposalBase & {
+      op: 'map_categories';
+      column: string;
+      mapping: Record<string, string>;
+      default: string | null;
+    })
+  | (ProposalBase & { op: 'is_missing'; column: string });
+
+export type ProposalRejection =
+  | 'malformed_specification'
+  | 'invalid_name'
+  | 'duplicate_name'
+  | 'name_already_in_dataset'
+  | 'unknown_column'
+  | 'target_reference'
+  | 'wrong_column_type'
+  | 'empty_mapping'
+  | 'limit_exceeded';
+
+export interface RejectedProposal {
+  name: string;
+  op: FeatureOp | null;
+  reason: ProposalRejection;
+  message: string;
+}
+
+export interface FeatureProposalReport {
+  schema_version: string;
+  experiment_id: string;
+  generated_at: string;
+  proposed_by: string | null;
+  candidates: FeatureProposal[];
+  rejected: RejectedProposal[];
+  approved_names: string[];
+  decided_at: string | null;
+  decided_by: string | null;
+}

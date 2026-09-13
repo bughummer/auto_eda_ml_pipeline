@@ -17,6 +17,7 @@ EDA_FILE = "eda/eda.json"
 LEAKAGE_FILE = "eda/leakage.json"
 EXPERIMENT_CONFIG_FILE = "config/experiment_config.json"
 SELECTED_FEATURES_FILE = "config/selected_features.json"
+FEATURE_PROPOSALS_FILE = "config/feature_proposals.json"
 TRAINING_CONFIG_FILE = "config/training_config.json"
 DATA_DICTIONARY_FILE = "config/data_dictionary.json"
 PREPARATION_FILE = "validation/validation.json"
@@ -53,6 +54,10 @@ class ExperimentLayout:
 
     def path(self, *parts: str) -> str:
         return join_uri(self.base, *parts)
+
+    @property
+    def feature_proposals(self) -> str:
+        return self.path(FEATURE_PROPOSALS_FILE)
 
     @property
     def definition(self) -> str:

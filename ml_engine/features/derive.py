@@ -14,7 +14,6 @@ import re
 from collections.abc import Iterable, Sequence
 
 import pandas as pd
-from pandas.api import types as pdt
 
 from ml_engine.contracts.common import Severity, WarningCategory
 from ml_engine.contracts.proposals import (
@@ -32,8 +31,7 @@ from ml_engine.contracts.proposals import (
     ZeroDenominatorPolicy,
 )
 from ml_engine.contracts.warnings import AnalysisWarning
-from ml_engine.profiling.config import ProfilingConfig
-from ml_engine.profiling.inference import is_datetime_series, looks_like_datetime
+from ml_engine.features.columns import ColumnTypes
 
 _VALID_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
 _DAYS_PER = {DateUnit.DAYS: 1.0, DateUnit.MONTHS: 365.25 / 12.0, DateUnit.YEARS: 365.25}
@@ -55,7 +53,7 @@ def source_columns(proposal: FeatureProposal) -> tuple[str, ...]:
 
 def validate_proposals(
     proposals: Sequence[FeatureProposal],
-    frame: pd.DataFrame,
+    columns: ColumnTypes,
     *,
     target_column: str,
     max_proposals: int = MAX_PROPOSALS,
@@ -64,12 +62,13 @@ def validate_proposals(
 
     Refusals are returned, not raised: a proposer that produces some unusable specifications is
     expected, and the reviewer should see what was discarded and why.
+
+    ``columns`` comes from the EDA report when a proposal is offered and from the dataframe
+    when preparation runs, so both checks reach the same verdict.
     """
     accepted: list[FeatureProposal] = []
     rejected: list[RejectedProposal] = []
     claimed: set[str] = set()
-    existing = set(frame.columns)
-    profiling_config = ProfilingConfig()
 
     for proposal in proposals:
         if len(accepted) >= max_proposals:
@@ -82,7 +81,7 @@ def validate_proposals(
             )
             continue
 
-        refusal = _check(proposal, frame, existing, claimed, target_column, profiling_config)
+        refusal = _check(proposal, columns, claimed, target_column)
         if refusal is not None:
             rejected.append(refusal)
             continue
@@ -153,11 +152,9 @@ def derivation_warnings(derived: Sequence[DerivedFeature], row_count: int) -> li
 
 def _check(
     proposal: FeatureProposal,
-    frame: pd.DataFrame,
-    existing: set[str],
+    columns: ColumnTypes,
     claimed: set[str],
     target_column: str,
-    profiling_config: ProfilingConfig,
 ) -> RejectedProposal | None:
     if not _VALID_NAME.match(proposal.name):
         return _reject(
@@ -171,15 +168,15 @@ def _check(
             ProposalRejection.DUPLICATE_NAME,
             f"Another accepted proposal already defines '{proposal.name}'.",
         )
-    if proposal.name in existing:
+    if columns.exists(proposal.name):
         return _reject(
             proposal,
             ProposalRejection.NAME_ALREADY_IN_DATASET,
             f"The dataset already has a column named '{proposal.name}'.",
         )
 
-    columns = source_columns(proposal)
-    for column in columns:
+    sources = source_columns(proposal)
+    for column in sources:
         if column == target_column:
             return _reject(
                 proposal,
@@ -187,26 +184,23 @@ def _check(
                 f"'{proposal.name}' reads the target column '{target_column}'. A feature "
                 "derived from the target is leakage by construction.",
             )
-        if column not in existing:
+        if not columns.exists(column):
             return _reject(
                 proposal,
                 ProposalRejection.UNKNOWN_COLUMN,
                 f"Column '{column}' is not in the dataset.",
             )
 
-    return _check_types(proposal, frame, columns, profiling_config)
+    return _check_types(proposal, columns, sources)
 
 
 def _check_types(
-    proposal: FeatureProposal,
-    frame: pd.DataFrame,
-    columns: tuple[str, ...],
-    profiling_config: ProfilingConfig,
+    proposal: FeatureProposal, columns: ColumnTypes, sources: tuple[str, ...]
 ) -> RejectedProposal | None:
     match proposal:
         case RatioProposal() | DifferenceProposal():
-            for column in columns:
-                if not _is_arithmetic(frame[column]):
+            for column in sources:
+                if not columns.is_arithmetic(column):
                     return _reject(
                         proposal,
                         ProposalRejection.WRONG_COLUMN_TYPE,
@@ -214,8 +208,8 @@ def _check_types(
                         "computed from it.",
                     )
         case DateDifferenceProposal():
-            for column in columns:
-                if not _is_date_like(frame[column], profiling_config):
+            for column in sources:
+                if not columns.is_date_like(column):
                     return _reject(
                         proposal,
                         ProposalRejection.WRONG_COLUMN_TYPE,
@@ -226,7 +220,7 @@ def _check_types(
                 return _reject(
                     proposal, ProposalRejection.EMPTY_MAPPING, "The category mapping is empty."
                 )
-            if _is_arithmetic(frame[proposal.column]):
+            if columns.is_arithmetic(proposal.column):
                 return _reject(
                     proposal,
                     ProposalRejection.WRONG_COLUMN_TYPE,
@@ -236,15 +230,6 @@ def _check_types(
         case IsMissingProposal():
             pass
     return None
-
-
-def _is_arithmetic(series: pd.Series) -> bool:
-    """Numeric and genuinely measured. Booleans are numeric to pandas but not to arithmetic."""
-    return bool(pdt.is_numeric_dtype(series)) and not bool(pdt.is_bool_dtype(series))
-
-
-def _is_date_like(series: pd.Series, config: ProfilingConfig) -> bool:
-    return is_datetime_series(series) or looks_like_datetime(series, config)
 
 
 def _reject(proposal: FeatureProposal, reason: ProposalRejection, message: str) -> RejectedProposal:

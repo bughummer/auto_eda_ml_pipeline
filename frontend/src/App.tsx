@@ -48,8 +48,9 @@ export function App() {
       </Layout.Content>
       <Layout.Footer style={{ textAlign: 'center' }}>
         <Typography.Text type="secondary">
-          Every statistic and metric shown here is computed deterministically. Language-model
-          output is confined to the semantic analysis tab and never changes a result.
+          Every statistic and metric shown here is computed deterministically. A language model
+          only interprets those results and suggests features for you to approve — it computes
+          nothing, and nothing it suggests takes effect until a person accepts it.
         </Typography.Text>
       </Layout.Footer>
     </Layout>

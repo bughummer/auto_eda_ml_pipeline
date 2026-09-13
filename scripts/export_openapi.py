@@ -17,7 +17,7 @@ OUTPUT = Path("frontend/src/api/openapi.json")
 
 
 def main() -> int:
-    app = create_app(Settings(mode="local"))
+    app = create_app(Settings())
     document = app.openapi()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
