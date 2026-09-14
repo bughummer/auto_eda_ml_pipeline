@@ -5,6 +5,14 @@ Description: >
   database. Deliberately contains no always-on compute: every ML workload is an ephemeral
   SageMaker job started by a workflow.
 
+  Each of the three runtime roles (backend, workflow, job) is created by this template by
+  default. Supply its ARN via the matching Existing*RoleArn parameter instead to have the
+  stack reference a role you created and reviewed yourself; the template then does not create,
+  own, or attach any policy to that role, so its permissions must already match the reference
+  policy in infrastructure/iam/ (backend_role_policy.json, workflow_role_policy.json,
+  job_role_policy.json) with the placeholders filled in for this deployment. Mixing the two —
+  some roles created here, others supplied — is fine; each is independent.
+
 Parameters:
   ArtifactBucketName:
     Type: String
@@ -40,6 +48,32 @@ Parameters:
   MaxRuntimeSeconds:
     Type: Number
     Default: 7200
+  ExistingBackendRoleArn:
+    Type: String
+    Default: ''
+    Description: >-
+      Leave empty to have this stack create MlFactoryBackendRole. Set to an existing role's
+      ARN to use that role instead — its permissions must already match
+      infrastructure/iam/backend_role_policy.json; this template will not attach anything to it.
+  ExistingWorkflowRoleArn:
+    Type: String
+    Default: ''
+    Description: >-
+      Leave empty to have this stack create MlFactoryWorkflowRole. Set to an existing role's
+      ARN to use that role instead — its permissions must already match
+      infrastructure/iam/workflow_role_policy.json; this template will not attach anything to it.
+  ExistingJobRoleArn:
+    Type: String
+    Default: ''
+    Description: >-
+      Leave empty to have this stack create MlFactoryJobRole. Set to an existing role's ARN to
+      use that role instead — its permissions must already match
+      infrastructure/iam/job_role_policy.json; this template will not attach anything to it.
+
+Conditions:
+  CreateBackendRole: !Equals [!Ref ExistingBackendRoleArn, '']
+  CreateWorkflowRole: !Equals [!Ref ExistingWorkflowRoleArn, '']
+  CreateJobRole: !Equals [!Ref ExistingJobRoleArn, '']
 
 Resources:
   ArtifactKey:
@@ -83,6 +117,7 @@ Resources:
 
   JobRole:
     Type: AWS::IAM::Role
+    Condition: CreateJobRole
     Properties:
       RoleName: MlFactoryJobRole
       Description: Assumed by the ephemeral SageMaker containers.
@@ -132,6 +167,7 @@ Resources:
 
   WorkflowRole:
     Type: AWS::IAM::Role
+    Condition: CreateWorkflowRole
     Properties:
       RoleName: MlFactoryWorkflowRole
       Description: Assumed by Step Functions. Creates ephemeral jobs; holds no data access.
@@ -163,7 +199,7 @@ Resources:
                 Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForSageMaker*Rule'
               - Effect: Allow
                 Action: ['iam:PassRole']
-                Resource: !GetAtt JobRole.Arn
+                Resource: !If [CreateJobRole, !GetAtt JobRole.Arn, !Ref ExistingJobRoleArn]
                 Condition:
                   StringEquals: { 'iam:PassedToService': sagemaker.amazonaws.com }
               # Stage transitions are written as state/workflow.json beside the artifacts.
@@ -176,6 +212,7 @@ Resources:
 
   BackendRole:
     Type: AWS::IAM::Role
+    Condition: CreateBackendRole
     Properties:
       RoleName: MlFactoryBackendRole
       Description: >
@@ -226,12 +263,12 @@ Resources:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: ml-factory-eda
-      RoleArn: !GetAtt WorkflowRole.Arn
+      RoleArn: !If [CreateWorkflowRole, !GetAtt WorkflowRole.Arn, !Ref ExistingWorkflowRoleArn]
       DefinitionS3Location:
         Bucket: !Ref DefinitionsBucket
         Key: !Ref EdaDefinitionKey
       DefinitionSubstitutions:
-        JobRoleArn: !GetAtt JobRole.Arn
+        JobRoleArn: !If [CreateJobRole, !GetAtt JobRole.Arn, !Ref ExistingJobRoleArn]
         JobImageUri: !Ref JobImageUri
         ProcessingInstanceType: !Ref ProcessingInstanceType
         ProcessingInstanceCount: '1'
@@ -248,12 +285,12 @@ Resources:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: ml-factory-training
-      RoleArn: !GetAtt WorkflowRole.Arn
+      RoleArn: !If [CreateWorkflowRole, !GetAtt WorkflowRole.Arn, !Ref ExistingWorkflowRoleArn]
       DefinitionS3Location:
         Bucket: !Ref DefinitionsBucket
         Key: !Ref TrainingDefinitionKey
       DefinitionSubstitutions:
-        JobRoleArn: !GetAtt JobRole.Arn
+        JobRoleArn: !If [CreateJobRole, !GetAtt JobRole.Arn, !Ref ExistingJobRoleArn]
         JobImageUri: !Ref JobImageUri
         ProcessingInstanceType: !Ref ProcessingInstanceType
         ProcessingInstanceCount: '1'
@@ -283,7 +320,7 @@ Outputs:
     Value: !Ref TrainingStateMachine
   BackendRoleArn:
     Description: Role the control plane assumes via STS from the corporate server
-    Value: !GetAtt BackendRole.Arn
+    Value: !If [CreateBackendRole, !GetAtt BackendRole.Arn, !Ref ExistingBackendRoleArn]
   KmsKeyId:
     Description: Value for ML_FACTORY_KMS_KEY_ID
     Value: !Ref ArtifactKey

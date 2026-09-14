@@ -37,6 +37,9 @@ def required_environment(monkeypatch):
         "AWS_SECRET_ACCESS_KEY",
         "AWS_SESSION_TOKEN",
         "DEPLOYER_ROLE_ARN",
+        "EXISTING_BACKEND_ROLE_ARN",
+        "EXISTING_WORKFLOW_ROLE_ARN",
+        "EXISTING_JOB_ROLE_ARN",
     ):
         monkeypatch.delenv(stray, raising=False)
 
@@ -266,3 +269,55 @@ def test_a_required_variable_left_unset_fails_fast(monkeypatch):
 
     with pytest.raises(SystemExit):
         deploy_aws.env("AWS_REGION", required=True)
+
+
+# --- main(): the existing-role parameters actually reach CloudFormation ---------
+
+
+def _run_main_with_everything_stubbed():
+    """main() end to end, with the network and Docker replaced. Returns the create_stack call."""
+    session = MagicMock()
+    cfn = session.client.return_value
+    cfn.exceptions.ClientError = FakeClientError
+    # deploy_stack's existence check raises "does not exist" once; the create path then
+    # succeeds, and print_outputs' own describe_stacks call afterward must not raise too.
+    cfn.describe_stacks.side_effect = [
+        FakeClientError("Stack ml-factory does not exist"),
+        {"Stacks": [{"Outputs": []}]},
+    ]
+    cfn.get_authorization_token.return_value = {
+        "authorizationData": [{"authorizationToken": base64.b64encode(b"AWS:pw").decode()}]
+    }
+    cfn.describe_repositories.return_value = {}
+
+    with (
+        patch("deploy_aws.build_session", return_value=session),
+        patch("deploy_aws.subprocess.run"),
+    ):
+        deploy_aws.main()
+
+    return cfn.create_stack.call_args.kwargs["Parameters"]
+
+
+def test_by_default_no_existing_role_is_passed_so_the_template_creates_all_three():
+    parameters = {
+        p["ParameterKey"]: p["ParameterValue"] for p in _run_main_with_everything_stubbed()
+    }
+
+    assert parameters["ExistingBackendRoleArn"] == ""
+    assert parameters["ExistingWorkflowRoleArn"] == ""
+    assert parameters["ExistingJobRoleArn"] == ""
+
+
+def test_existing_role_arns_are_forwarded_to_the_stack(monkeypatch):
+    monkeypatch.setenv("EXISTING_BACKEND_ROLE_ARN", "arn:aws:iam::123456789012:role/Backend")
+    monkeypatch.setenv("EXISTING_WORKFLOW_ROLE_ARN", "arn:aws:iam::123456789012:role/Workflow")
+    monkeypatch.setenv("EXISTING_JOB_ROLE_ARN", "arn:aws:iam::123456789012:role/Job")
+
+    parameters = {
+        p["ParameterKey"]: p["ParameterValue"] for p in _run_main_with_everything_stubbed()
+    }
+
+    assert parameters["ExistingBackendRoleArn"] == "arn:aws:iam::123456789012:role/Backend"
+    assert parameters["ExistingWorkflowRoleArn"] == "arn:aws:iam::123456789012:role/Workflow"
+    assert parameters["ExistingJobRoleArn"] == "arn:aws:iam::123456789012:role/Job"

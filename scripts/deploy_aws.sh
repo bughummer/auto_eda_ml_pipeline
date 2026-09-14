@@ -17,6 +17,12 @@
 #   APPROVED_DATA_PREFIX    default: curated
 #   IMAGE_TAG               default: the short git SHA
 #   STACK_NAME              default: ml-factory
+#   EXISTING_BACKEND_ROLE_ARN    use this role instead of creating MlFactoryBackendRole
+#   EXISTING_WORKFLOW_ROLE_ARN   use this role instead of creating MlFactoryWorkflowRole
+#   EXISTING_JOB_ROLE_ARN        use this role instead of creating MlFactoryJobRole
+#   Each Existing*RoleArn role must already carry the matching policy in infrastructure/iam/
+#   (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) - this script
+#   does not create or modify a role you supply.
 set -euo pipefail
 
 : "${AWS_REGION:?set AWS_REGION}"
@@ -65,7 +71,10 @@ aws cloudformation deploy \
     "ApprovedDataBucketName=${APPROVED_DATA_BUCKET}" \
     "ApprovedDataPrefix=${APPROVED_DATA_PREFIX}" \
     "JobImageUri=${IMAGE_URI}" \
-    "DefinitionsBucket=${DEFINITIONS_BUCKET}"
+    "DefinitionsBucket=${DEFINITIONS_BUCKET}" \
+    "ExistingBackendRoleArn=${EXISTING_BACKEND_ROLE_ARN:-}" \
+    "ExistingWorkflowRoleArn=${EXISTING_WORKFLOW_ROLE_ARN:-}" \
+    "ExistingJobRoleArn=${EXISTING_JOB_ROLE_ARN:-}"
 
 echo
 echo "Done. Copy these into config/secrets/config.py:"

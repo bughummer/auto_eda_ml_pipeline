@@ -73,6 +73,24 @@ If your organization requires a first deploy under a broader policy (e.g. while 
 resource list), `deployer_policy.json` is still the target to narrow down to afterward — every
 action in it traces to a specific step below.
 
+### Supplying a role instead of letting the stack create it
+
+Some organizations require every IAM role to be created and reviewed outside of CloudFormation.
+Each of the three runtime roles can be supplied instead of created: pass its ARN via
+`ExistingBackendRoleArn`, `ExistingWorkflowRoleArn`, or `ExistingJobRoleArn` (`make deploy-aws`
+via `EXISTING_BACKEND_ROLE_ARN` etc., `make deploy-aws-nocli` the same, or
+`--parameter-overrides` directly) and the stack references that role instead of creating
+`MlFactoryBackendRole` / `MlFactoryWorkflowRole` / `MlFactoryJobRole`. Leave a parameter empty
+(the default) to have the stack create that one role as usual — mixing is fine, each of the
+three is independent.
+
+The stack never attaches a policy to a role you supply, so it must already carry the matching
+reference policy — `backend_role_policy.json`, `workflow_role_policy.json`, or
+`job_role_policy.json` — with the placeholders filled in for this deployment, trusted the way
+that policy's `Comment` describes (backend: `sts:AssumeRole` from the account; workflow: from
+`states.amazonaws.com`; job: from `sagemaker.amazonaws.com`). Create and attach it before
+deploying — the stack will reference the ARN, not validate what it can do.
+
 ## Deploying
 
 `make deploy-aws` runs all of this for you (`scripts/deploy_aws.sh`, which shells out to the

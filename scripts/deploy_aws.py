@@ -20,6 +20,12 @@ Optional:
     APPROVED_DATA_PREFIX    default: curated
     IMAGE_TAG               default: the short git SHA
     STACK_NAME              default: ml-factory
+    EXISTING_BACKEND_ROLE_ARN    use this role instead of creating MlFactoryBackendRole
+    EXISTING_WORKFLOW_ROLE_ARN   use this role instead of creating MlFactoryWorkflowRole
+    EXISTING_JOB_ROLE_ARN        use this role instead of creating MlFactoryJobRole
+    Each Existing*RoleArn role must already carry the matching policy in infrastructure/iam/
+    (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) — this
+    script does not create or modify a role you supply.
 
 Credentials, in order of preference — the same chain boto3 always uses, made explicit here so
 a deployer who has no CLI configured knows exactly what to set:
@@ -206,6 +212,9 @@ def main() -> None:
     approved_data_prefix = env("APPROVED_DATA_PREFIX", "curated")
     stack_name = env("STACK_NAME", "ml-factory")
     image_tag = env("IMAGE_TAG") or git_short_sha()
+    existing_backend_role_arn = env("EXISTING_BACKEND_ROLE_ARN")
+    existing_workflow_role_arn = env("EXISTING_WORKFLOW_ROLE_ARN")
+    existing_job_role_arn = env("EXISTING_JOB_ROLE_ARN")
 
     repository = "ml-factory-jobs"
     registry = f"{account_id}.dkr.ecr.{region}.amazonaws.com"
@@ -229,6 +238,9 @@ def main() -> None:
             "ApprovedDataPrefix": approved_data_prefix,
             "JobImageUri": image_uri,
             "DefinitionsBucket": definitions_bucket,
+            "ExistingBackendRoleArn": existing_backend_role_arn,
+            "ExistingWorkflowRoleArn": existing_workflow_role_arn,
+            "ExistingJobRoleArn": existing_job_role_arn,
         },
     )
     print_outputs(cfn, stack_name)
