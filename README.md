@@ -168,6 +168,12 @@ the fallback, and must be set as a pair — a half-configured pair is
 reported by `GET /api/v1/health`, which also states which credential source is in effect
 without ever returning a credential.
 
+**Or specify the role directly in the same file, without touching `~/.aws` at all.** Set
+`AWS_ROLE_ARN` and whatever gave you access — static keys, a named profile, or nothing (the
+default chain) — is used only to assume that role. Every AWS call the platform makes then runs
+as the role, with temporary credentials refreshed automatically before they expire, so this
+stays correct for the life of the running container rather than failing an hour after startup.
+
 The settings that matter:
 
 | Variable | Meaning |

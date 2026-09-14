@@ -138,6 +138,13 @@ class Settings(BaseSettings):
     aws_secret_access_key: SecretStr | None = None
     aws_session_token: SecretStr | None = None
     aws_profile: str | None = None
+    # Set alongside any of the above (or alone, to assume from the default chain) to run as
+    # this role instead of whatever identity the keys/profile/chain resolve to directly. The
+    # credentials are auto-refreshed before they expire, the same mechanism a role_arn profile
+    # in ~/.aws/config uses — so this works for a long-running process, not just a one-off
+    # script. The role itself needs infrastructure/iam/backend_role_policy.json; the base
+    # identity only needs sts:AssumeRole on this ARN.
+    aws_role_arn: str | None = None
 
     # --- aws resources ----------------------------------------------------
     aws_region: str = "eu-central-1"
@@ -194,10 +201,14 @@ class Settings(BaseSettings):
     def credential_source(self) -> str:
         """How AWS credentials will be obtained. Safe to log — no values."""
         if self.has_static_credentials:
-            return "static access key from configuration"
-        if self.aws_profile:
-            return f"shared profile {self.aws_profile!r}"
-        return "default AWS chain (~/.aws, or an attached role)"
+            base = "static access key from configuration"
+        elif self.aws_profile:
+            base = f"shared profile {self.aws_profile!r}"
+        else:
+            base = "default AWS chain (~/.aws, or an attached role)"
+        if self.aws_role_arn:
+            return f"{base}, assuming {self.aws_role_arn}"
+        return base
 
     @property
     def artifact_root(self) -> str:

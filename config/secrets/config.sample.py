@@ -38,6 +38,13 @@ AWS_SESSION_TOKEN = None  # only for temporary (STS) credentials
 # Or name a profile from ~/.aws/credentials instead of typing keys here:
 AWS_PROFILE = None  # "ml-factory"
 
+# Set this to run as a different role than whatever the keys/profile/chain above resolve to
+# directly — that identity is used only to call sts:AssumeRole, and every AWS call the platform
+# makes then runs as this role instead, with temporary credentials refreshed automatically
+# before they expire. Leave the four fields above as None to assume from the default chain
+# (an attached role, ~/.aws, ...) rather than from static keys.
+AWS_ROLE_ARN = None  # "arn:aws:iam::123456789012:role/MlFactoryBackendRole"
+
 AWS_REGION = "eu-central-1"
 
 # ---------------------------------------------------------------------------
