@@ -82,16 +82,14 @@ Setting it up, and the account permissions needed to deploy, are in
 ## Deploying
 
 Two steps, in this order. The first is AWS-side and is needed once per release; the second
-runs the control plane.
+runs the control plane. Neither needs `export` — both read a config file.
 
 ```bash
-# 1. Build and push the job image SageMaker runs, upload the workflow definitions, and
-#    create or update the stack (S3 + KMS + IAM + the two state machines).
-AWS_REGION=eu-central-1 AWS_ACCOUNT_ID=123456789012 \
-ARTIFACT_BUCKET=my-ml-factory-artifacts \
-APPROVED_DATA_BUCKET=my-approved-data \
-DEFINITIONS_BUCKET=my-deploy-bucket \
-make deploy-aws
+# 1. Fill in deploy-time settings (region, account, bucket names, credentials), then build and
+#    push the job image, upload the workflow definitions, and create or update the stack
+#    (S3 + KMS + IAM + the two state machines).
+cp config/secrets/deploy.sample.py config/secrets/deploy.py   # fill it in
+make deploy-aws-nocli                          # or make deploy-aws, if you have the aws CLI
 
 # 2. Put the stack outputs into config/secrets/config.py, then run the control plane.
 cp config/secrets/config.sample.py config/secrets/config.py   # fill in the outputs

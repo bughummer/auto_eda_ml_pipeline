@@ -123,31 +123,49 @@ aws cloudformation describe-stacks --stack-name ml-factory \
   --query 'Stacks[0].Outputs' --output table
 ```
 
+### Without exporting anything
+
+Every setting `deploy_aws.sh` and `deploy_aws.py` read — region, account id, the three bucket
+names, credentials, the `Existing*RoleArn`s — can be a line in `config/secrets/deploy.py`
+instead of an environment variable. Copy the sample once:
+
+```bash
+cp config/secrets/deploy.sample.py config/secrets/deploy.py   # then fill it in
+make deploy-aws-nocli   # or make deploy-aws — both read this file
+```
+
+`config/secrets/deploy.py` is gitignored, exactly like `config/secrets/config.py`; the sample
+is tracked. An environment variable of the same name still wins where both are set, so CI can
+override one value without editing the file. `deploy_aws.sh` loads it via
+`eval "$(python scripts/deploy_aws.py --print-shell-exports)"` — one loader, shared by both
+entrypoints, so the file's precedence rules never drift between them.
+
+This is a different file from `config/secrets/config.py`: this one holds the *deployer's*
+settings, read once, for the identity that stands the platform up; `config.py` holds the
+*platform's own* settings, read continuously by the running container.
+
 ### Without the `aws` CLI
 
 `make deploy-aws-nocli` (`scripts/deploy_aws.py`) does the same four steps over boto3 instead —
 no CLI binary, just Python and the `boto3` package (already installed with `make install`).
 Docker is still required: building and pushing the job image has no SDK equivalent.
 
-The same environment variables apply. Credentials, in order of preference:
+The same settings apply, from either the environment or `config/secrets/deploy.py`.
+Credentials, in order of preference:
 
-1. **`DEPLOYER_ROLE_ARN`** — whatever base identity boto3 finds (env vars, a profile, an
-   attached role) calls `sts:AssumeRole` on it, and every AWS call in the script runs as that
-   role. The base identity only needs `sts:AssumeRole` on this one ARN; the role itself needs
-   `deployer_policy.json`. Use this when you were handed a role ARN to deploy as, rather than
-   your own long-lived credentials.
+1. **`DEPLOYER_ROLE_ARN`** — whatever base identity boto3 finds (the file, env vars, a
+   profile, an attached role) calls `sts:AssumeRole` on it, and every AWS call in the script
+   runs as that role. The base identity only needs `sts:AssumeRole` on this one ARN; the role
+   itself needs `deployer_policy.json`. Use this when you were handed a role ARN to deploy as,
+   rather than your own long-lived credentials.
 2. **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`** (plus `AWS_SESSION_TOKEN` if they are
    temporary — e.g. already produced by someone else's `sts:AssumeRole` call) — used directly.
    This identity needs `deployer_policy.json` itself, not just permission to assume a role.
 3. Nothing set — boto3's default chain, same as everywhere else in this repository.
 
-```bash
-export AWS_REGION=eu-central-1 AWS_ACCOUNT_ID=123456789012
-export ARTIFACT_BUCKET=my-ml-factory-artifacts APPROVED_DATA_BUCKET=my-approved-data
-export DEFINITIONS_BUCKET=my-deploy-bucket
-export DEPLOYER_ROLE_ARN=arn:aws:iam::123456789012:role/MlFactoryDeployer  # or the key pair above
-make deploy-aws-nocli
-```
+`deploy_aws.py` prints which of the three is in effect as it starts, without ever printing a
+credential — the same `credential_source()` pattern `GET /api/v1/health` uses for the running
+platform.
 
 ## Running the control plane
 

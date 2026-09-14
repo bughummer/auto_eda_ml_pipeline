@@ -7,7 +7,11 @@
 #
 #   ./scripts/deploy_aws.sh
 #
-# Required environment (or pass them inline):
+# Every setting below can be an environment variable, or a line in config/secrets/deploy.py
+# (copy config/secrets/deploy.sample.py) - the environment wins where both are set. Nothing
+# requires `export`; a filled-in deploy.py alone is enough to run this script.
+#
+# Required:
 #   AWS_REGION              e.g. eu-central-1
 #   AWS_ACCOUNT_ID          e.g. 123456789012
 #   ARTIFACT_BUCKET         bucket the stack creates for artifacts and experiment records
@@ -17,6 +21,8 @@
 #   APPROVED_DATA_PREFIX    default: curated
 #   IMAGE_TAG               default: the short git SHA
 #   STACK_NAME              default: ml-factory
+#   DEPLOYER_ROLE_ARN            assume this role to deploy (needs sts:AssumeRole on it; the
+#                                role itself needs infrastructure/iam/deployer_policy.json)
 #   EXISTING_BACKEND_ROLE_ARN    use this role instead of creating MlFactoryBackendRole
 #   EXISTING_WORKFLOW_ROLE_ARN   use this role instead of creating MlFactoryWorkflowRole
 #   EXISTING_JOB_ROLE_ARN        use this role instead of creating MlFactoryJobRole
@@ -24,6 +30,26 @@
 #   (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) - this script
 #   does not create or modify a role you supply.
 set -euo pipefail
+
+# Pull whatever config/secrets/deploy.py sets for names not already in the environment. One
+# loader (deploy_aws.py's load_deploy_secrets) serves both this script and the boto3 one, so
+# the file's format and precedence rules do not drift between them.
+PYTHON_BIN="python3"
+[ -x .venv/bin/python ] && PYTHON_BIN=".venv/bin/python"
+DEPLOY_SECRETS_FILE="${ML_FACTORY_DEPLOY_SECRETS_FILE:-config/secrets/deploy.py}"
+if [ -f "${DEPLOY_SECRETS_FILE}" ]; then
+    eval "$("${PYTHON_BIN}" scripts/deploy_aws.py --print-shell-exports)"
+fi
+
+if [ -n "${DEPLOYER_ROLE_ARN:-}" ]; then
+    echo "==> Assuming ${DEPLOYER_ROLE_ARN}"
+    read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN < <(
+        aws sts assume-role --role-arn "${DEPLOYER_ROLE_ARN}" \
+            --role-session-name ml-factory-deploy \
+            --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text
+    )
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+fi
 
 : "${AWS_REGION:?set AWS_REGION}"
 : "${AWS_ACCOUNT_ID:?set AWS_ACCOUNT_ID}"

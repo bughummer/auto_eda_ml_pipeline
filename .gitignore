@@ -18,6 +18,8 @@ frontend/dist/
 # Operator credentials. The sample stays tracked; the real file never is.
 config/secrets/config.py
 !config/secrets/config.sample.py
+config/secrets/deploy.py
+!config/secrets/deploy.sample.py
 .local/
 data/local/
 var/

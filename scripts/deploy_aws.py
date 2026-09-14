@@ -9,7 +9,11 @@ goes through boto3 directly.
 
     python scripts/deploy_aws.py
 
-Required environment:
+Every setting below can be an environment variable, or a line in config/secrets/deploy.py
+(copy config/secrets/deploy.sample.py) — the environment wins where both are set. Nothing
+requires `export`; a filled-in deploy.py alone is enough to run this script.
+
+Required:
     AWS_REGION              e.g. eu-central-1
     AWS_ACCOUNT_ID          e.g. 123456789012
     ARTIFACT_BUCKET         bucket the stack creates for artifacts and experiment records
@@ -29,35 +33,123 @@ Optional:
 
 Credentials, in order of preference — the same chain boto3 always uses, made explicit here so
 a deployer who has no CLI configured knows exactly what to set:
-    1. DEPLOYER_ROLE_ARN set -> whatever base identity is otherwise found (env vars, a
-       profile, an attached role) calls sts:AssumeRole on it, and every AWS call below runs
-       as that role instead. The base identity only needs sts:AssumeRole on this one ARN;
-       the role itself needs infrastructure/iam/deployer_policy.json.
+    1. DEPLOYER_ROLE_ARN set -> whatever base identity is otherwise found (env vars,
+       deploy.py, a profile, an attached role) calls sts:AssumeRole on it, and every AWS call
+       below runs as that role instead. The base identity only needs sts:AssumeRole on this
+       one ARN; the role itself needs infrastructure/iam/deployer_policy.json.
     2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN if they are temporary,
        e.g. already produced by someone else's assume-role call) -> used directly. This
        identity needs infrastructure/iam/deployer_policy.json itself.
     3. Nothing set -> boto3's default chain (~/.aws, an attached role, ...), exactly as every
        other AWS call in this repository resolves credentials.
-No credential of any shape is read from a file this script writes or logs.
+config/secrets/deploy.py is gitignored, exactly like config/secrets/config.py; no credential
+of any shape is otherwise written to a file or logged by this script.
 """
 
 from __future__ import annotations
 
 import base64
+import importlib.util
 import os
+import shlex
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: Where an operator types deploy-time settings instead of exporting them. Tracked sample:
+#: config/secrets/deploy.sample.py. Overridable for tests, matching backend/config.py's
+#: ML_FACTORY_SECRETS_FILE.
+DEPLOY_SECRETS_FILE_ENV_VAR = "ML_FACTORY_DEPLOY_SECRETS_FILE"
+
+#: Recognised by scripts/deploy_aws.sh's --print-shell-exports bridge (see below). deploy.py
+#: itself may hold other names too — load_deploy_secrets() does not filter by this list, only
+#: the shell bridge does, so it never exports something that was not meant as a setting.
+_RECOGNISED_KEYS = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "DEPLOYER_ROLE_ARN",
+    "AWS_REGION",
+    "AWS_ACCOUNT_ID",
+    "ARTIFACT_BUCKET",
+    "APPROVED_DATA_BUCKET",
+    "DEFINITIONS_BUCKET",
+    "APPROVED_DATA_PREFIX",
+    "IMAGE_TAG",
+    "STACK_NAME",
+    "EXISTING_BACKEND_ROLE_ARN",
+    "EXISTING_WORKFLOW_ROLE_ARN",
+    "EXISTING_JOB_ROLE_ARN",
+)
+
+
+def _deploy_secrets_file() -> Path:
+    return Path(
+        os.environ.get(DEPLOY_SECRETS_FILE_ENV_VAR, str(ROOT / "config" / "secrets" / "deploy.py"))
+    )
+
+
+def load_deploy_secrets() -> dict[str, str]:
+    """Values from config/secrets/deploy.py — an empty dict if the file does not exist.
+
+    Loaded the same way backend/config.py reads config/secrets/config.py: module-level names
+    are read directly, with imports, callables and names starting with ``_`` ignored, so the
+    file can carry comments and helpers without them leaking in as settings. A value left as
+    ``None`` (the sample's default for everything) is dropped rather than returned, so it
+    falls through to the environment exactly as if the name were absent from the file.
+    """
+    path = _deploy_secrets_file()
+    if not path.is_file():
+        return {}
+    spec = importlib.util.spec_from_file_location("ml_factory_deploy_secrets", path)
+    if spec is None or spec.loader is None:
+        return {}
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return {
+        name: str(value)
+        for name, value in vars(module).items()
+        if not name.startswith("_")
+        and value is not None
+        and not isinstance(value, types.ModuleType)
+        and not callable(value)
+    }
+
+
+def _resolve(name: str) -> str | None:
+    """A setting's value: the environment first, config/secrets/deploy.py second."""
+    return os.environ.get(name) or load_deploy_secrets().get(name)
+
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str:
-    value = os.environ.get(name, default)
+    value = _resolve(name) or default
     if required and not value:
-        print(f"error: set {name}", file=sys.stderr)
+        print(
+            f"error: set {name} (as an environment variable, or in config/secrets/deploy.py)",
+            file=sys.stderr,
+        )
         sys.exit(1)
     return value or ""
+
+
+def print_shell_exports() -> None:
+    """Bridge for scripts/deploy_aws.sh: deploy.py's settings as `export KEY=value` lines.
+
+    Only for the recognised keys, and only those the shell does not already have set — the
+    same "environment wins" precedence env() applies, made visible to a process that is not
+    this one. ``eval "$(python scripts/deploy_aws.py --print-shell-exports)"`` is how the bash
+    script picks these up before it starts making its own `aws` CLI calls.
+    """
+    secrets = load_deploy_secrets()
+    for key in _RECOGNISED_KEYS:
+        if key in os.environ:
+            continue
+        value = secrets.get(key)
+        if value:
+            print(f"export {key}={shlex.quote(value)}")
 
 
 def git_short_sha() -> str:
@@ -69,21 +161,33 @@ def git_short_sha() -> str:
         return "latest"
 
 
+def credential_source() -> str:
+    """How deploy credentials will be obtained. Safe to print — no values."""
+    if _resolve("AWS_ACCESS_KEY_ID") and _resolve("AWS_SECRET_ACCESS_KEY"):
+        base = "static access key"
+    else:
+        base = "default AWS chain (~/.aws, or an attached role)"
+    role_arn = _resolve("DEPLOYER_ROLE_ARN")
+    return f"{base}, assuming {role_arn}" if role_arn else base
+
+
 def build_session():
     """The credential chain described in the module docstring, as boto3 calls."""
     import boto3
 
+    print(f"==> Deploy credentials: {credential_source()}")
     region = env("AWS_REGION", required=True)
-    role_arn = os.environ.get("DEPLOYER_ROLE_ARN")
+    role_arn = _resolve("DEPLOYER_ROLE_ARN")
 
     session_kwargs: dict[str, str] = {"region_name": region}
-    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    access_key = _resolve("AWS_ACCESS_KEY_ID")
+    secret_key = _resolve("AWS_SECRET_ACCESS_KEY")
     if access_key and secret_key:
         session_kwargs["aws_access_key_id"] = access_key
         session_kwargs["aws_secret_access_key"] = secret_key
-        if os.environ.get("AWS_SESSION_TOKEN"):
-            session_kwargs["aws_session_token"] = os.environ["AWS_SESSION_TOKEN"]
+        session_token = _resolve("AWS_SESSION_TOKEN")
+        if session_token:
+            session_kwargs["aws_session_token"] = session_token
 
     base_session = boto3.session.Session(**session_kwargs)
     if not role_arn:
@@ -247,4 +351,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if "--print-shell-exports" in sys.argv:
+        print_shell_exports()
+    else:
+        main()
