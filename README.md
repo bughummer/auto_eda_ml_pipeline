@@ -104,7 +104,9 @@ docker compose up -d --build
 `make deploy-aws` exists because `docker compose` cannot do that work: compose runs containers
 on this host, while SageMaker needs its image in ECR and Step Functions needs its state
 machines to exist in AWS. It is one idempotent script (`scripts/deploy_aws.sh`) — re-run it to
-ship a new job image.
+ship a new job image. No `aws` CLI on hand? `make deploy-aws-nocli` (`scripts/deploy_aws.py`)
+does the same thing over boto3; see
+[`infrastructure/README.md`](infrastructure/README.md#without-the-aws-cli).
 
 The job image is a *different* image from the one compose builds: compose builds the control
 plane (FastAPI + the React app); `infrastructure/docker/Dockerfile` builds what SageMaker runs.

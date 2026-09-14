@@ -2,7 +2,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front openapi deploy-aws docker-build docker-up docker-down docker-logs clean
+.PHONY: help install install-backend install-frontend lint format test test-fast build-front dev api front openapi deploy-aws deploy-aws-nocli docker-build docker-up docker-down docker-logs clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -42,8 +42,11 @@ front: ## run the Vite dev server
 dev: ## run API and frontend together
 	$(MAKE) -j2 api front
 
-deploy-aws: ## build and push the job image, upload the workflows, deploy the stack
+deploy-aws: ## build and push the job image, upload the workflows, deploy the stack (needs the aws CLI)
 	./scripts/deploy_aws.sh
+
+deploy-aws-nocli: ## same as deploy-aws, over boto3 - no aws CLI binary needed, still needs Docker
+	$(PY) scripts/deploy_aws.py
 
 sample-data: ## generate sample datasets to upload to an approved S3 prefix
 	$(PY) scripts/sample_data.py

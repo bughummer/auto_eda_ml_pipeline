@@ -75,8 +75,8 @@ action in it traces to a specific step below.
 
 ## Deploying
 
-`make deploy-aws` runs all of this for you (`scripts/deploy_aws.sh`); the steps are spelled out
-here for reference.
+`make deploy-aws` runs all of this for you (`scripts/deploy_aws.sh`, which shells out to the
+`aws` CLI); the steps are spelled out here for reference.
 
 ```bash
 # 1. Build and push the job image
@@ -103,6 +103,32 @@ aws cloudformation deploy \
 # 4. Feed the stack outputs into the control plane's environment (.env)
 aws cloudformation describe-stacks --stack-name ml-factory \
   --query 'Stacks[0].Outputs' --output table
+```
+
+### Without the `aws` CLI
+
+`make deploy-aws-nocli` (`scripts/deploy_aws.py`) does the same four steps over boto3 instead —
+no CLI binary, just Python and the `boto3` package (already installed with `make install`).
+Docker is still required: building and pushing the job image has no SDK equivalent.
+
+The same environment variables apply. Credentials, in order of preference:
+
+1. **`DEPLOYER_ROLE_ARN`** — whatever base identity boto3 finds (env vars, a profile, an
+   attached role) calls `sts:AssumeRole` on it, and every AWS call in the script runs as that
+   role. The base identity only needs `sts:AssumeRole` on this one ARN; the role itself needs
+   `deployer_policy.json`. Use this when you were handed a role ARN to deploy as, rather than
+   your own long-lived credentials.
+2. **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`** (plus `AWS_SESSION_TOKEN` if they are
+   temporary — e.g. already produced by someone else's `sts:AssumeRole` call) — used directly.
+   This identity needs `deployer_policy.json` itself, not just permission to assume a role.
+3. Nothing set — boto3's default chain, same as everywhere else in this repository.
+
+```bash
+export AWS_REGION=eu-central-1 AWS_ACCOUNT_ID=123456789012
+export ARTIFACT_BUCKET=my-ml-factory-artifacts APPROVED_DATA_BUCKET=my-approved-data
+export DEFINITIONS_BUCKET=my-deploy-bucket
+export DEPLOYER_ROLE_ARN=arn:aws:iam::123456789012:role/MlFactoryDeployer  # or the key pair above
+make deploy-aws-nocli
 ```
 
 ## Running the control plane
