@@ -515,8 +515,9 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
     print(f"    Status: {detail.get('Status')}")
     print(f"    StatusReason: {detail.get('StatusReason', '(none)')}")
 
-    # A failed validation hook names only itself here; which resource it objected to is in the
-    # stack's own events. Read them before the cleanup below takes the stack away.
+    # The StatusReason above names only the hook. Which resource it objected to is in this
+    # operation's own events — read them before the cleanup below takes the change set away.
+    print_operation_events(cfn, ChangeSetName=created["Id"])
     with contextlib.suppress(cfn.exceptions.ClientError):
         _print_stack_failure_reasons(cfn, diagnostic_name)
 
@@ -527,7 +528,7 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
         cfn.delete_stack(StackName=diagnostic_name)
 
 
-def print_operation_events(cfn, stack_name: str) -> None:
+def print_operation_events(cfn, **target: str) -> None:
     """DescribeEvents — a different API from DescribeStackEvents, and the one CloudFormation's
     own "Call DescribeEvents to retrieve the full list of issues" message means literally.
 
@@ -535,16 +536,22 @@ def print_operation_events(cfn, stack_name: str) -> None:
     ValidationStatusReason), which is where an Early Validation check says which resource it
     objected to. DescribeStackEvents has no such fields at all, so that failure is unreadable
     there no matter which of its keys you look under.
+
+    ``target`` is StackName=... or ChangeSetName=... — a change set that failed validation is
+    the more direct target of the two, being a single operation with nothing else in it.
     """
-    print(f"==> Failed operation events for {stack_name} (DescribeEvents)")
+    label = next(iter(target.values()), "")
+    print(f"==> Operation events for {label} (DescribeEvents)")
     describe = getattr(cfn, "describe_events", None)
     if describe is None:
         print("    (this boto3 is too old for DescribeEvents; pip install -U boto3)")
         return
     try:
-        events = describe(StackName=stack_name, Filters={"FailedEvents": True}).get(
-            "OperationEvents", []
-        )
+        events = describe(**target, Filters={"FailedEvents": True}).get("OperationEvents", [])
+        if not events:
+            # Not every validation failure is flagged as a "failed event"; take the whole
+            # operation rather than report nothing.
+            events = describe(**target).get("OperationEvents", [])
     except cfn.exceptions.ClientError as error:
         print(f"    (unavailable: {error})")
         return
@@ -580,7 +587,7 @@ def diagnose() -> None:
     cfn = session.client("cloudformation")
     # The real stack is the one that actually attempted a create, so it is the one whose events
     # carry the validation failure's detail; the change-set probe below never gets that far.
-    print_operation_events(cfn, stack_name)
+    print_operation_events(cfn, StackName=stack_name)
     print_raw_stack_events(cfn, stack_name)
     diagnose_stack(cfn, stack_name=stack_name, parameters=parameters)
 

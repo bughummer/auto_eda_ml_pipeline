@@ -618,7 +618,7 @@ def test_describe_events_is_used_for_the_validation_detail_stack_events_cannot_c
         ]
     }
 
-    deploy_aws.print_operation_events(cfn, "ml-factory")
+    deploy_aws.print_operation_events(cfn, StackName="ml-factory")
 
     out = capsys.readouterr().out
     assert cfn.describe_events.call_args.kwargs["Filters"] == {"FailedEvents": True}
@@ -626,10 +626,51 @@ def test_describe_events_is_used_for_the_validation_detail_stack_events_cannot_c
     assert "/Resources/EdaStateMachine/Properties/DefinitionS3Location" in out
 
 
+def test_operation_events_fall_back_to_the_whole_operation_when_none_are_flagged_failed(capsys):
+    """Not every validation failure is flagged as a failed event; reporting nothing in that
+    case would hide the answer for the second time."""
+    cfn = MagicMock()
+    cfn.describe_events.side_effect = [
+        {"OperationEvents": []},
+        {"OperationEvents": [{"ValidationStatusReason": "the unflagged reason"}]},
+    ]
+
+    deploy_aws.print_operation_events(cfn, ChangeSetName="cs-id")
+
+    assert "the unflagged reason" in capsys.readouterr().out
+    assert "Filters" not in cfn.describe_events.call_args_list[1].kwargs
+
+
+def test_operation_events_accept_a_change_set_as_the_target():
+    cfn = MagicMock()
+    cfn.describe_events.return_value = {"OperationEvents": [{"ValidationStatus": "FAILED"}]}
+
+    deploy_aws.print_operation_events(cfn, ChangeSetName="arn:changeset/diagnose")
+
+    assert cfn.describe_events.call_args.kwargs["ChangeSetName"] == "arn:changeset/diagnose"
+
+
+def test_diagnose_stack_reads_the_change_sets_own_operation_events():
+    """The change set is a single failed operation with nothing else in it, so it is the more
+    direct target than the stack for the validation detail."""
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {"Status": "FAILED", "StatusReason": "hook failed"}
+    cfn.describe_events.return_value = {"OperationEvents": []}
+    cfn.describe_stack_events.return_value = {"StackEvents": []}
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    assert any(
+        call.kwargs.get("ChangeSetName") == "cs-id" for call in cfn.describe_events.call_args_list
+    )
+
+
 def test_an_older_boto3_without_describe_events_says_so_instead_of_crashing(capsys):
     cfn = MagicMock(spec=["exceptions"])
 
-    deploy_aws.print_operation_events(cfn, "ml-factory")
+    deploy_aws.print_operation_events(cfn, StackName="ml-factory")
 
     assert "too old" in capsys.readouterr().out
 
