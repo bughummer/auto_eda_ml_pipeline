@@ -226,6 +226,89 @@ def test_a_failed_deploy_prints_the_actual_failing_resources_before_raising():
     cfn.describe_stack_events.assert_called_once_with(StackName="ml-factory")
 
 
+# --- preflight: name the wrong setting instead of leaving a CloudFormation post-mortem -----
+
+
+def _client_error(code: str, operation: str = "HeadBucket"):
+    from botocore.exceptions import ClientError
+
+    return ClientError({"Error": {"Code": code, "Message": code}}, operation)
+
+
+PREFLIGHT_PARAMETERS = {
+    "ApprovedDataBucketName": "my-data",
+    "DefinitionsBucket": "my-definitions",
+    "ExistingBackendRoleArn": "",
+    "ExistingWorkflowRoleArn": "",
+    "ExistingJobRoleArn": "",
+}
+
+
+def test_preflight_passes_when_every_referenced_resource_exists():
+    session = MagicMock()
+
+    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+
+    checked = {c.kwargs["Bucket"] for c in session.client.return_value.head_bucket.call_args_list}
+    assert checked == {"my-data", "my-definitions"}
+
+
+def test_preflight_names_the_setting_behind_a_missing_bucket(capsys):
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = [None, _client_error("404")]
+
+    with pytest.raises(SystemExit):
+        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+
+    err = capsys.readouterr().err
+    assert "DEFINITIONS_BUCKET" in err
+    assert "no such bucket" in err
+
+
+def test_preflight_ignores_empty_role_arns_because_the_stack_creates_those_roles():
+    """Empty is the default and means "create it", not "a value is missing"."""
+    session = MagicMock()
+
+    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+
+    session.client.return_value.get_role.assert_not_called()
+
+
+def test_preflight_checks_a_supplied_role_actually_exists(capsys):
+    session = MagicMock()
+    session.client.return_value.get_role.side_effect = _client_error("NoSuchEntity", "GetRole")
+    parameters = {
+        **PREFLIGHT_PARAMETERS,
+        "ExistingJobRoleArn": "arn:aws:iam::920373012873:role/automl_test",
+    }
+
+    with pytest.raises(SystemExit):
+        deploy_aws.preflight(session, parameters)
+
+    assert session.client.return_value.get_role.call_args.kwargs == {"RoleName": "automl_test"}
+    assert "EXISTING_JOB_ROLE_ARN" in capsys.readouterr().err
+
+
+def test_preflight_runs_before_anything_is_built_or_uploaded(monkeypatch):
+    """A wrong bucket name should cost two seconds, not a full image build."""
+    monkeypatch.setenv("SKIP_IMAGE_BUILD", "1")
+    session = MagicMock()
+    session.client.return_value.head_bucket.side_effect = _client_error("404")
+
+    with (
+        patch("deploy_aws.build_session", return_value=session),
+        patch("deploy_aws.ensure_ecr_repository") as ensure_repo,
+        patch("deploy_aws.upload_workflow_definitions") as upload,
+        patch("deploy_aws.deploy_stack") as deploy,
+        pytest.raises(SystemExit),
+    ):
+        deploy_aws.main()
+
+    ensure_repo.assert_not_called()
+    upload.assert_not_called()
+    deploy.assert_not_called()
+
+
 def test_a_repository_that_already_exists_is_not_recreated():
     ecr = MagicMock()
     ecr.exceptions.RepositoryNotFoundException = FakeClientError

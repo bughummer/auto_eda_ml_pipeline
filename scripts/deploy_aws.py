@@ -222,6 +222,55 @@ def build_session():
     )
 
 
+def preflight(session, parameters: dict[str, str]) -> None:
+    """Check what CloudFormation's Early Validation checks, but name the setting that is wrong.
+
+    A stack referencing a bucket or a role that does not exist is rejected with one opaque
+    "Validation failed with 1 error(s)" and no indication of which reference it objected to.
+    Checking first turns that post-mortem into the name of a value to fix, and does it before
+    an image build rather than after one.
+    """
+    from botocore.exceptions import ClientError
+
+    print("==> 0/4 Checking the resources the stack expects to already exist")
+    s3 = session.client("s3")
+    iam = session.client("iam")
+    problems: list[str] = []
+
+    for setting, key in (
+        ("APPROVED_DATA_BUCKET", "ApprovedDataBucketName"),
+        ("DEFINITIONS_BUCKET", "DefinitionsBucket"),
+    ):
+        bucket = parameters[key]
+        try:
+            s3.head_bucket(Bucket=bucket)
+            print(f"    {setting} s3://{bucket} ok")
+        except ClientError as error:
+            code = error.response.get("Error", {}).get("Code", "")
+            problems.append(f"{setting}={bucket!r}: {'no such bucket' if code == '404' else error}")
+
+    for setting, key in (
+        ("EXISTING_BACKEND_ROLE_ARN", "ExistingBackendRoleArn"),
+        ("EXISTING_WORKFLOW_ROLE_ARN", "ExistingWorkflowRoleArn"),
+        ("EXISTING_JOB_ROLE_ARN", "ExistingJobRoleArn"),
+    ):
+        arn = parameters.get(key) or ""
+        if not arn:
+            # Empty is the default and means the stack creates that role itself.
+            continue
+        try:
+            iam.get_role(RoleName=arn.rpartition("/")[2])
+            print(f"    {setting} {arn} ok")
+        except ClientError as error:
+            problems.append(f"{setting}={arn!r}: {error}")
+
+    if problems:
+        print("\nerror: fix these in config/secrets/deploy.py before deploying:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        sys.exit(1)
+
+
 def ensure_ecr_repository(ecr, repository: str) -> None:
     print(f"==> 1/4 ECR repository {repository}")
     try:
@@ -525,7 +574,10 @@ def print_raw_stack_events(cfn, stack_name: str, *, limit: int = 25) -> None:
 
 def diagnose() -> None:
     _region, stack_name, _image_uri, parameters = _deploy_inputs()
-    cfn = build_session().client("cloudformation")
+    session = build_session()
+    _print_parameters(parameters)
+    preflight(session, parameters)
+    cfn = session.client("cloudformation")
     # The real stack is the one that actually attempted a create, so it is the one whose events
     # carry the validation failure's detail; the change-set probe below never gets that far.
     print_operation_events(cfn, stack_name)
@@ -544,6 +596,7 @@ def main() -> None:
     s3 = session.client("s3")
     cfn = session.client("cloudformation")
 
+    preflight(session, parameters)
     ensure_ecr_repository(ecr, repository)
     if _flag("SKIP_IMAGE_BUILD"):
         print_manual_image_commands(registry, image_uri, region=region)
