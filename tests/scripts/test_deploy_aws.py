@@ -151,6 +151,27 @@ def test_a_real_update_failure_is_not_swallowed():
         )
 
 
+def test_the_parameters_sent_are_printed_so_a_wrong_one_is_visible(capsys):
+    """An empty Existing*RoleArn is the default (the stack creates that role itself), not a
+    missing value — which is only obvious if the values reach the terminal."""
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.describe_stacks.side_effect = FakeClientError("Stack ml-factory does not exist")
+
+    deploy_aws.deploy_stack(
+        cfn,
+        stack_name="ml-factory",
+        parameters={
+            "ArtifactBucketName": "my-artifacts",
+            "ExistingJobRoleArn": "",
+        },
+    )
+
+    out = capsys.readouterr().out
+    assert "ArtifactBucketName" in out and "my-artifacts" in out
+    assert "ExistingJobRoleArn" in out and "(empty)" in out
+
+
 def test_a_stack_stuck_in_rollback_complete_is_deleted_then_recreated():
     """CloudFormation refuses to update a ROLLBACK_COMPLETE stack; the only way forward is to
     delete it and create it again."""

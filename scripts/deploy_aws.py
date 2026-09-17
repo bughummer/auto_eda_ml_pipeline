@@ -342,10 +342,20 @@ def _print_stack_failure_reasons(cfn, stack_name: str) -> None:
             print(f"      {event['LogicalResourceId']} [{hook}]: {reason}")
 
 
+def _print_parameters(parameters: dict[str, str]) -> None:
+    """What the stack is actually being given. An empty Existing*RoleArn means the stack
+    creates that role itself, which is the default and not a missing value — printing them
+    makes the difference visible rather than something to infer from a config file."""
+    width = max((len(name) for name in parameters), default=0)
+    for name, value in parameters.items():
+        print(f"    {name:<{width}}  {value or '(empty)'}")
+
+
 def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
     from botocore.exceptions import WaiterError
 
     print(f"==> 4/4 Deploy the stack {stack_name}")
+    _print_parameters(parameters)
     template_body = (ROOT / "infrastructure" / "cloudformation" / "ml-factory.yaml").read_text()
     cfn_parameters = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
 
@@ -440,6 +450,7 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
     cfn_parameters = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
 
     print(f"==> Creating a disposable change set ({diagnostic_name}) to see the full errors")
+    _print_parameters(parameters)
     created = cfn.create_change_set(
         StackName=diagnostic_name,
         TemplateBody=template_body,
