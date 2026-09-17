@@ -309,6 +309,73 @@ def test_by_default_no_existing_role_is_passed_so_the_template_creates_all_three
     assert parameters["ExistingJobRoleArn"] == ""
 
 
+# --- SKIP_IMAGE_BUILD: Docker and this script on different machines -------------
+
+
+def test_skip_image_build_prints_manual_commands_instead_of_running_docker():
+    with patch("deploy_aws.subprocess.run") as run:
+        deploy_aws.print_manual_image_commands(
+            "123456789012.dkr.ecr.eu-central-1.amazonaws.com",
+            "registry/repo:tag",
+            region="eu-central-1",
+        )
+
+    run.assert_not_called()
+
+
+def test_skip_image_build_manual_commands_never_decode_or_print_a_credential(capsys):
+    """The pipeline fetches and consumes the ECR token on the Docker host in one step; this
+    script must never hold or print a decoded password itself."""
+    deploy_aws.print_manual_image_commands(
+        "123456789012.dkr.ecr.eu-central-1.amazonaws.com",
+        "registry/repo:tag",
+        region="eu-central-1",
+    )
+
+    out = capsys.readouterr().out
+    assert (
+        "aws ecr get-login-password --region eu-central-1 | "
+        "docker login --username AWS --password-stdin "
+        "123456789012.dkr.ecr.eu-central-1.amazonaws.com" in out
+    )
+    assert "docker build -f infrastructure/docker/Dockerfile -t registry/repo:tag ." in out
+    assert "docker push registry/repo:tag" in out
+
+
+def test_skip_image_build_flag_recognises_common_truthy_spellings(monkeypatch):
+    for value in ("1", "true", "True", "yes", "on"):
+        monkeypatch.setenv("SKIP_IMAGE_BUILD", value)
+        assert deploy_aws._flag("SKIP_IMAGE_BUILD") is True
+
+    monkeypatch.setenv("SKIP_IMAGE_BUILD", "0")
+    assert deploy_aws._flag("SKIP_IMAGE_BUILD") is False
+
+
+def test_main_skips_docker_when_skip_image_build_is_set(monkeypatch):
+    monkeypatch.setenv("SKIP_IMAGE_BUILD", "1")
+
+    session = MagicMock()
+    cfn = session.client.return_value
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.describe_stacks.side_effect = [
+        FakeClientError("Stack ml-factory does not exist"),
+        {"Stacks": [{"Outputs": []}]},
+    ]
+    cfn.get_authorization_token.return_value = {
+        "authorizationData": [{"authorizationToken": base64.b64encode(b"AWS:pw").decode()}]
+    }
+    cfn.describe_repositories.return_value = {}
+
+    with (
+        patch("deploy_aws.build_session", return_value=session),
+        patch("deploy_aws.subprocess.run") as run,
+    ):
+        deploy_aws.main()
+
+    run.assert_not_called()
+    cfn.create_stack.assert_called_once()
+
+
 def test_existing_role_arns_are_forwarded_to_the_stack(monkeypatch):
     monkeypatch.setenv("EXISTING_BACKEND_ROLE_ARN", "arn:aws:iam::123456789012:role/Backend")
     monkeypatch.setenv("EXISTING_WORKFLOW_ROLE_ARN", "arn:aws:iam::123456789012:role/Workflow")

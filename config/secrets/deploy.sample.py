@@ -55,3 +55,8 @@ STACK_NAME = "ml-factory"
 EXISTING_BACKEND_ROLE_ARN = None  # "arn:aws:iam::123456789012:role/MlFactoryBackendRole"
 EXISTING_WORKFLOW_ROLE_ARN = None  # "arn:aws:iam::123456789012:role/MlFactoryWorkflowRole"
 EXISTING_JOB_ROLE_ARN = None  # "arn:aws:iam::123456789012:role/MlFactoryJobRole"
+
+# Set to "1" when Docker and this script run on two different machines (e.g. Docker is only
+# reachable through a separate shell). Skips the build/push here and prints the commands to
+# run on the Docker-capable host instead; the rest of the deploy continues normally.
+SKIP_IMAGE_BUILD = None  # "1"

@@ -167,6 +167,30 @@ Credentials, in order of preference:
 credential — the same `credential_source()` pattern `GET /api/v1/health` uses for the running
 platform.
 
+### When Docker and Python are on different machines
+
+Some environments split these across two shells that cannot reach each other — Docker only
+works from a MobaXterm/jump-host session, boto3 only works from a separate container that has
+no Docker binary at all. Set `SKIP_IMAGE_BUILD=1` (env var or `config/secrets/deploy.py`) and
+run the script on the Python side as usual:
+
+```bash
+SKIP_IMAGE_BUILD=1 make deploy-aws-nocli
+```
+
+It still creates the ECR repository over boto3, but instead of building and pushing the image
+itself, it prints the exact `aws ecr get-login-password | docker login`, `docker build` and
+`docker push` commands — copy those into the Docker-capable shell and run them there, from the
+repository root. Nothing decodes or prints a credential to get there: the token is fetched and
+consumed on the Docker host, in the one pipeline, the same way the CLI-based deploy path already
+does it. That host needs the `aws` CLI and the deployer's credentials reachable there — plain
+environment variables or a mounted `~/.aws` profile, neither of which needs Python or a venv.
+
+The script then continues straight on to uploading the workflow definitions and deploying the
+CloudFormation stack in the same run: the stack does not check that the image already exists in
+ECR, only that it exists by the time a job actually starts, so the order between "paste those
+three commands elsewhere" and "the stack finishes deploying" does not matter.
+
 ## Running the control plane
 
 The control plane is one container on the corporate server — the one permanently available host

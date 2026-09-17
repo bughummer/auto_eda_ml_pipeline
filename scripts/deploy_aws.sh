@@ -29,6 +29,10 @@
 #   Each Existing*RoleArn role must already carry the matching policy in infrastructure/iam/
 #   (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) - this script
 #   does not create or modify a role you supply.
+#   SKIP_IMAGE_BUILD             set (e.g. "1") when Docker and this script run on different
+#                                hosts. Skips the docker login/build/push here and instead
+#                                prints the exact commands to run on the Docker-capable host,
+#                                then continues on to the workflow upload and the stack deploy.
 set -euo pipefail
 
 # Pull whatever config/secrets/deploy.py sets for names not already in the environment. One
@@ -71,16 +75,27 @@ aws ecr describe-repositories --region "${AWS_REGION}" --repository-names "${REP
         --image-scanning-configuration scanOnPush=true \
         --encryption-configuration encryptionType=AES256 >/dev/null
 
-echo "==> 2/4 Build and push the job image ${IMAGE_URI}"
-# This is the image SageMaker runs. It is not the control-plane image that compose builds.
-aws ecr get-login-password --region "${AWS_REGION}" |
-    docker login --username AWS --password-stdin "${REGISTRY}"
-docker build \
-    --build-arg "http_proxy=${http_proxy:-}" \
-    --build-arg "https_proxy=${https_proxy:-}" \
-    -f infrastructure/docker/Dockerfile \
-    -t "${IMAGE_URI}" .
-docker push "${IMAGE_URI}"
+if [ -n "${SKIP_IMAGE_BUILD:-}" ]; then
+    echo "==> 2/4 Build and push the job image ${IMAGE_URI} (SKIP_IMAGE_BUILD set)"
+    echo "    Run these on your Docker-capable host, from the repository root, with the aws"
+    echo "    CLI and deployer credentials reachable there (env vars or ~/.aws - no Python"
+    echo "    required for either):"
+    echo
+    echo "    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}"
+    echo "    docker build -f infrastructure/docker/Dockerfile -t ${IMAGE_URI} ."
+    echo "    docker push ${IMAGE_URI}"
+else
+    echo "==> 2/4 Build and push the job image ${IMAGE_URI}"
+    # This is the image SageMaker runs. It is not the control-plane image that compose builds.
+    aws ecr get-login-password --region "${AWS_REGION}" |
+        docker login --username AWS --password-stdin "${REGISTRY}"
+    docker build \
+        --build-arg "http_proxy=${http_proxy:-}" \
+        --build-arg "https_proxy=${https_proxy:-}" \
+        -f infrastructure/docker/Dockerfile \
+        -t "${IMAGE_URI}" .
+    docker push "${IMAGE_URI}"
+fi
 
 echo "==> 3/4 Upload the workflow definitions"
 aws s3 cp infrastructure/stepfunctions/ "s3://${DEFINITIONS_BUCKET}/ml-factory/stepfunctions/" \

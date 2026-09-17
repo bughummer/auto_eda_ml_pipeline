@@ -30,6 +30,10 @@ Optional:
     Each Existing*RoleArn role must already carry the matching policy in infrastructure/iam/
     (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) — this
     script does not create or modify a role you supply.
+    SKIP_IMAGE_BUILD ("1"/"true")   for when Docker and this script run on two different
+    machines. Skips docker_login/build/push and instead prints the exact commands to run on
+    the Docker-capable host, then continues on to the workflow upload and the CloudFormation
+    deploy — CloudFormation does not check that the image already exists in ECR.
 
 Credentials, in order of preference — the same chain boto3 always uses, made explicit here so
 a deployer who has no CLI configured knows exactly what to set:
@@ -83,7 +87,14 @@ _RECOGNISED_KEYS = (
     "EXISTING_BACKEND_ROLE_ARN",
     "EXISTING_WORKFLOW_ROLE_ARN",
     "EXISTING_JOB_ROLE_ARN",
+    "SKIP_IMAGE_BUILD",
 )
+
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _flag(name: str) -> bool:
+    return (_resolve(name) or "").strip().lower() in _TRUTHY
 
 
 def _deploy_secrets_file() -> Path:
@@ -255,6 +266,26 @@ def build_and_push_image(image_uri: str) -> None:
     subprocess.run(["docker", "push", image_uri], check=True)
 
 
+def print_manual_image_commands(registry: str, image_uri: str, *, region: str) -> None:
+    """For SKIP_IMAGE_BUILD: when Docker only exists on a different host than this script runs
+    on, there is no session or pipe to hand it — only text to copy into that other terminal.
+    This never decodes or prints a credential itself; it prints the same `aws ecr
+    get-login-password | docker login` pipeline the CLI path already uses, so the token is
+    fetched and consumed on the Docker host, in the same process, and never appears as text.
+    That host needs the `aws` CLI and deployer credentials reachable there (env vars or a
+    mounted `~/.aws` profile — no Python required for either).
+    """
+    print(f"==> 2/4 Build and push the job image {image_uri} (SKIP_IMAGE_BUILD set)")
+    print("    Run these on your Docker-capable host, from the repository root:")
+    print()
+    print(
+        f"    aws ecr get-login-password --region {region} | "
+        f"docker login --username AWS --password-stdin {registry}"
+    )
+    print(f"    docker build -f infrastructure/docker/Dockerfile -t {image_uri} .")
+    print(f"    docker push {image_uri}")
+
+
 def upload_workflow_definitions(s3, bucket: str) -> None:
     print("==> 3/4 Upload the workflow definitions")
     source = ROOT / "infrastructure" / "stepfunctions"
@@ -330,8 +361,11 @@ def main() -> None:
     cfn = session.client("cloudformation")
 
     ensure_ecr_repository(ecr, repository)
-    docker_login(ecr, registry)
-    build_and_push_image(image_uri)
+    if _flag("SKIP_IMAGE_BUILD"):
+        print_manual_image_commands(registry, image_uri, region=region)
+    else:
+        docker_login(ecr, registry)
+        build_and_push_image(image_uri)
     upload_workflow_definitions(s3, definitions_bucket)
     deploy_stack(
         cfn,
