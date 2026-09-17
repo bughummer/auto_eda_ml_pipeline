@@ -235,7 +235,16 @@ def _client_error(code: str, operation: str = "HeadBucket"):
     return ClientError({"Error": {"Code": code, "Message": code}}, operation)
 
 
+def _artifact_bucket_is_free(Bucket: str):  # noqa: N803 - boto3's own parameter name
+    """head_bucket for the happy path: the two existing buckets are there, and the one the
+    stack creates (REQUIRED_ENV's ARTIFACT_BUCKET) is not."""
+    if Bucket == REQUIRED_ENV["ARTIFACT_BUCKET"]:
+        raise _client_error("404")
+    return {}
+
+
 PREFLIGHT_PARAMETERS = {
+    "ArtifactBucketName": "my-artifacts",
     "ApprovedDataBucketName": "my-data",
     "DefinitionsBucket": "my-definitions",
     "ExistingBackendRoleArn": "",
@@ -244,38 +253,92 @@ PREFLIGHT_PARAMETERS = {
 }
 
 
-def test_preflight_passes_when_every_referenced_resource_exists():
+def _session(*, taken: set[str] = frozenset(), stack_exists: bool = False) -> MagicMock:
+    """A session whose head_bucket answers per bucket: 404 unless the name is taken."""
     session = MagicMock()
+    client = session.client.return_value
 
-    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+    def head_bucket(Bucket: str):  # noqa: N803 - boto3's own parameter name
+        if Bucket in taken:
+            return {}
+        raise _client_error("404")
+
+    client.head_bucket.side_effect = head_bucket
+    client.exceptions.ClientError = FakeClientError
+    if stack_exists:
+        client.describe_stacks.return_value = {"Stacks": [{"StackStatus": "CREATE_COMPLETE"}]}
+    else:
+        client.describe_stacks.side_effect = FakeClientError("Stack ml-factory does not exist")
+    return session
+
+
+def test_preflight_passes_when_the_existing_buckets_exist_and_the_new_name_is_free():
+    session = _session(taken={"my-data", "my-definitions"})
+
+    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
 
     checked = {c.kwargs["Bucket"] for c in session.client.return_value.head_bucket.call_args_list}
-    assert checked == {"my-data", "my-definitions"}
+    assert checked == {"my-data", "my-definitions", "my-artifacts"}
 
 
 def test_preflight_names_the_setting_behind_a_missing_bucket(capsys):
-    session = MagicMock()
-    session.client.return_value.head_bucket.side_effect = [None, _client_error("404")]
+    session = _session(taken={"my-data"})
 
     with pytest.raises(SystemExit):
-        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
 
     err = capsys.readouterr().err
     assert "DEFINITIONS_BUCKET" in err
     assert "no such bucket" in err
 
 
+def test_preflight_rejects_an_artifact_bucket_whose_name_is_already_taken(capsys):
+    """This one the stack creates, so the name has to be free — the opposite of the others,
+    and the failure CloudFormation reports as the same opaque validation error."""
+    session = _session(taken={"my-data", "my-definitions", "my-artifacts"})
+
+    with pytest.raises(SystemExit):
+        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
+
+    assert "ARTIFACT_BUCKET" in capsys.readouterr().err
+
+
+def test_an_artifact_bucket_taken_by_another_account_is_still_taken(capsys):
+    """S3 names are global: 403 means the name is someone else's, not that it is available."""
+    session = _session(taken={"my-data", "my-definitions"})
+    client = session.client.return_value
+    original = client.head_bucket.side_effect
+
+    def head_bucket(Bucket: str):  # noqa: N803 - boto3's own parameter name
+        if Bucket == "my-artifacts":
+            raise _client_error("403")
+        return original(Bucket=Bucket)
+
+    client.head_bucket.side_effect = head_bucket
+
+    with pytest.raises(SystemExit):
+        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
+
+    assert "ARTIFACT_BUCKET" in capsys.readouterr().err
+
+
+def test_a_redeploy_accepts_the_artifact_bucket_the_stack_already_owns():
+    session = _session(taken={"my-data", "my-definitions", "my-artifacts"}, stack_exists=True)
+
+    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
+
+
 def test_preflight_ignores_empty_role_arns_because_the_stack_creates_those_roles():
     """Empty is the default and means "create it", not "a value is missing"."""
-    session = MagicMock()
+    session = _session(taken={"my-data", "my-definitions"})
 
-    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS)
+    deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
 
     session.client.return_value.get_role.assert_not_called()
 
 
 def test_preflight_checks_a_supplied_role_actually_exists(capsys):
-    session = MagicMock()
+    session = _session(taken={"my-data", "my-definitions"})
     session.client.return_value.get_role.side_effect = _client_error("NoSuchEntity", "GetRole")
     parameters = {
         **PREFLIGHT_PARAMETERS,
@@ -283,7 +346,7 @@ def test_preflight_checks_a_supplied_role_actually_exists(capsys):
     }
 
     with pytest.raises(SystemExit):
-        deploy_aws.preflight(session, parameters)
+        deploy_aws.preflight(session, parameters, stack_name="ml-factory")
 
     assert session.client.return_value.get_role.call_args.kwargs == {"RoleName": "automl_test"}
     assert "EXISTING_JOB_ROLE_ARN" in capsys.readouterr().err
@@ -759,6 +822,7 @@ def _run_main_with_everything_stubbed():
         "authorizationData": [{"authorizationToken": base64.b64encode(b"AWS:pw").decode()}]
     }
     cfn.describe_repositories.return_value = {}
+    cfn.head_bucket.side_effect = _artifact_bucket_is_free
 
     with (
         patch("deploy_aws.build_session", return_value=session),
@@ -835,6 +899,7 @@ def test_main_skips_docker_when_skip_image_build_is_set(monkeypatch):
         "authorizationData": [{"authorizationToken": base64.b64encode(b"AWS:pw").decode()}]
     }
     cfn.describe_repositories.return_value = {}
+    cfn.head_bucket.side_effect = _artifact_bucket_is_free
 
     with (
         patch("deploy_aws.build_session", return_value=session),

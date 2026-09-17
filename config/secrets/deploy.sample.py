@@ -37,7 +37,10 @@ DEPLOYER_ROLE_ARN = None  # "arn:aws:iam::123456789012:role/MlFactoryDeployer"
 # ---------------------------------------------------------------------------
 AWS_REGION = "eu-central-1"
 AWS_ACCOUNT_ID = ""  # "123456789012"
-ARTIFACT_BUCKET = ""  # a name — this is what the stack creates, it must not already exist
+# The stack CREATES this one, so the name must be free — and S3 names are global across every
+# AWS account, so a generic name is probably already someone else's. Include the account id and
+# region: "ml-factory-artifacts-123456789012-eu-central-1".
+ARTIFACT_BUCKET = ""
 APPROVED_DATA_BUCKET = ""  # an existing bucket holding approved datasets
 DEFINITIONS_BUCKET = ""  # an existing bucket the workflow definitions get uploaded to
 

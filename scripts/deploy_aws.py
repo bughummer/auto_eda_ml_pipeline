@@ -222,13 +222,26 @@ def build_session():
     )
 
 
-def preflight(session, parameters: dict[str, str]) -> None:
+def _bucket_name_taken(s3, bucket: str) -> bool:
+    """Whether the name is in use. S3 names are global, so 403 counts too: the name is taken
+    even where the bucket belongs to another account and is invisible from here."""
+    from botocore.exceptions import ClientError
+
+    try:
+        s3.head_bucket(Bucket=bucket)
+        return True
+    except ClientError as error:
+        return error.response.get("Error", {}).get("Code", "") == "403"
+
+
+def preflight(session, parameters: dict[str, str], *, stack_name: str) -> None:
     """Check what CloudFormation's Early Validation checks, but name the setting that is wrong.
 
-    A stack referencing a bucket or a role that does not exist is rejected with one opaque
-    "Validation failed with 1 error(s)" and no indication of which reference it objected to.
-    Checking first turns that post-mortem into the name of a value to fix, and does it before
-    an image build rather than after one.
+    Both directions matter. A stack referencing a bucket or role that does *not* exist is
+    rejected, and so is one creating a bucket whose name is already *taken* — each as the same
+    opaque "Validation failed with 1 error(s)" naming neither the reference nor the setting
+    behind it. Checking first turns that post-mortem into the name of a value to fix, before an
+    image build rather than after one.
     """
     from botocore.exceptions import ClientError
 
@@ -263,6 +276,23 @@ def preflight(session, parameters: dict[str, str]) -> None:
             print(f"    {setting} {arn} ok")
         except ClientError as error:
             problems.append(f"{setting}={arn!r}: {error}")
+
+    # The opposite check: this one the stack creates, so the name has to be free. It is not on
+    # a redeploy, where the bucket is the stack's own from a previous run — and the template
+    # keeps it on delete, so a stack that got as far as creating it and was then torn down
+    # leaves the name taken and every later create failing on it.
+    artifact_bucket = parameters["ArtifactBucketName"]
+    if _bucket_name_taken(s3, artifact_bucket):
+        cfn = session.client("cloudformation")
+        if _stack_status(cfn, stack_name) is None:
+            problems.append(
+                f"ARTIFACT_BUCKET={artifact_bucket!r}: already exists, and the stack creates it."
+                " S3 bucket names are global, so this may well be someone else's — pick a name"
+                " nothing has taken (ml-factory-artifacts-<account id>-<region>, say). If it is"
+                " yours from an earlier attempt, delete it or choose another name."
+            )
+    else:
+        print(f"    ARTIFACT_BUCKET s3://{artifact_bucket} free to create")
 
     if problems:
         print("\nerror: fix these in config/secrets/deploy.py before deploying:", file=sys.stderr)
@@ -583,7 +613,7 @@ def diagnose() -> None:
     _region, stack_name, _image_uri, parameters = _deploy_inputs()
     session = build_session()
     _print_parameters(parameters)
-    preflight(session, parameters)
+    preflight(session, parameters, stack_name=stack_name)
     cfn = session.client("cloudformation")
     # The real stack is the one that actually attempted a create, so it is the one whose events
     # carry the validation failure's detail; the change-set probe below never gets that far.
@@ -603,7 +633,7 @@ def main() -> None:
     s3 = session.client("s3")
     cfn = session.client("cloudformation")
 
-    preflight(session, parameters)
+    preflight(session, parameters, stack_name=stack_name)
     ensure_ecr_repository(ecr, repository)
     if _flag("SKIP_IMAGE_BUILD"):
         print_manual_image_commands(registry, image_uri, region=region)
