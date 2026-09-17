@@ -266,6 +266,30 @@ def test_workflow_definitions_are_uploaded_under_the_fixed_prefix():
         assert call_args.args[1] == "my-definitions"
 
 
+def test_uploading_nothing_stops_the_deploy_instead_of_passing_silently(monkeypatch, tmp_path):
+    """Both state machines reference these objects by exact key, so a silent zero-file upload
+    deploys a stack pointing at objects that do not exist — and CloudFormation rejects that
+    with an opaque validation error, not a readable missing-object one."""
+    monkeypatch.setattr(deploy_aws, "ROOT", tmp_path)
+    (tmp_path / "infrastructure" / "stepfunctions").mkdir(parents=True)
+    s3 = MagicMock()
+
+    with pytest.raises(SystemExit):
+        deploy_aws.upload_workflow_definitions(s3, "my-definitions")
+
+    s3.upload_file.assert_not_called()
+
+
+def test_each_uploaded_definition_is_named_so_a_wrong_bucket_is_visible(capsys):
+    s3 = MagicMock()
+
+    deploy_aws.upload_workflow_definitions(s3, "my-definitions")
+
+    out = capsys.readouterr().out
+    assert "s3://my-definitions/ml-factory/stepfunctions/eda_state_machine.asl.json" in out
+    assert "s3://my-definitions/ml-factory/stepfunctions/training_state_machine.asl.json" in out
+
+
 # --- credentials ------------------------------------------------------------------
 
 
@@ -473,6 +497,37 @@ def test_diagnose_stack_tolerates_the_throwaway_stack_already_being_gone():
     cfn.delete_stack.side_effect = FakeClientError("Stack ml-factory-diagnose does not exist")
 
     deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+
+def test_describe_events_is_used_for_the_validation_detail_stack_events_cannot_carry(capsys):
+    """DescribeEvents is a different API from DescribeStackEvents and the only one with the
+    Validation* fields naming what an Early Validation check objected to."""
+    cfn = MagicMock()
+    cfn.describe_events.return_value = {
+        "OperationEvents": [
+            {
+                "ValidationName": "AWS::EarlyValidation::ResourceExistenceCheck",
+                "ValidationStatus": "FAILED",
+                "ValidationStatusReason": "The S3 object my-definitions/eda.asl.json not found",
+                "ValidationPath": "/Resources/EdaStateMachine/Properties/DefinitionS3Location",
+            }
+        ]
+    }
+
+    deploy_aws.print_operation_events(cfn, "ml-factory")
+
+    out = capsys.readouterr().out
+    assert cfn.describe_events.call_args.kwargs["Filters"] == {"FailedEvents": True}
+    assert "The S3 object my-definitions/eda.asl.json not found" in out
+    assert "/Resources/EdaStateMachine/Properties/DefinitionS3Location" in out
+
+
+def test_an_older_boto3_without_describe_events_says_so_instead_of_crashing(capsys):
+    cfn = MagicMock(spec=["exceptions"])
+
+    deploy_aws.print_operation_events(cfn, "ml-factory")
+
+    assert "too old" in capsys.readouterr().out
 
 
 def test_raw_events_are_printed_whole_rather_than_filtered_to_known_fields(capsys):

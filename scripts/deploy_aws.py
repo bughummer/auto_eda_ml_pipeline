@@ -294,11 +294,20 @@ def print_manual_image_commands(registry: str, image_uri: str, *, region: str) -
 
 
 def upload_workflow_definitions(s3, bucket: str) -> None:
+    """Both state machines reference these objects by exact key, so uploading nothing leaves
+    the stack pointing at objects that do not exist — which CloudFormation rejects with an
+    opaque validation error rather than a missing-object one. Say what was uploaded, and stop
+    here rather than deploy a stack that cannot work."""
     print("==> 3/4 Upload the workflow definitions")
     source = ROOT / "infrastructure" / "stepfunctions"
-    for path in sorted(source.glob("*.asl.json")):
+    paths = sorted(source.glob("*.asl.json"))
+    if not paths:
+        print(f"error: no *.asl.json definitions found under {source}", file=sys.stderr)
+        sys.exit(1)
+    for path in paths:
         key = f"ml-factory/stepfunctions/{path.name}"
         s3.upload_file(str(path), bucket, key)
+        print(f"    s3://{bucket}/{key}")
 
 
 def _stack_status(cfn, stack_name: str) -> str | None:
@@ -458,6 +467,33 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
         cfn.delete_stack(StackName=diagnostic_name)
 
 
+def print_operation_events(cfn, stack_name: str) -> None:
+    """DescribeEvents — a different API from DescribeStackEvents, and the one CloudFormation's
+    own "Call DescribeEvents to retrieve the full list of issues" message means literally.
+
+    Only its OperationEvents carry the Validation* fields (ValidationName, ValidationPath,
+    ValidationStatusReason), which is where an Early Validation check says which resource it
+    objected to. DescribeStackEvents has no such fields at all, so that failure is unreadable
+    there no matter which of its keys you look under.
+    """
+    print(f"==> Failed operation events for {stack_name} (DescribeEvents)")
+    describe = getattr(cfn, "describe_events", None)
+    if describe is None:
+        print("    (this boto3 is too old for DescribeEvents; pip install -U boto3)")
+        return
+    try:
+        events = describe(StackName=stack_name, Filters={"FailedEvents": True}).get(
+            "OperationEvents", []
+        )
+    except cfn.exceptions.ClientError as error:
+        print(f"    (unavailable: {error})")
+        return
+    if not events:
+        print("    (none)")
+    for event in events:
+        print(json.dumps(event, indent=2, default=str, sort_keys=True))
+
+
 def print_raw_stack_events(cfn, stack_name: str, *, limit: int = 25) -> None:
     """Every field of the most recent events, verbatim.
 
@@ -480,7 +516,8 @@ def diagnose() -> None:
     _region, stack_name, _image_uri, parameters = _deploy_inputs()
     cfn = build_session().client("cloudformation")
     # The real stack is the one that actually attempted a create, so it is the one whose events
-    # carry the hook's own complaint; the change-set probe below never gets that far.
+    # carry the validation failure's detail; the change-set probe below never gets that far.
+    print_operation_events(cfn, stack_name)
     print_raw_stack_events(cfn, stack_name)
     diagnose_stack(cfn, stack_name=stack_name, parameters=parameters)
 
