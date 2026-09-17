@@ -833,6 +833,33 @@ def _run_main_with_everything_stubbed():
     return cfn.create_stack.call_args.kwargs["Parameters"]
 
 
+def test_every_parameter_main_sends_is_declared_by_the_template():
+    """deploy_stack's own test pins a hand-written dict; this pins what main() actually sends,
+    so a parameter added to one side and not the other fails the whole deploy at CloudFormation
+    rather than here."""
+    template = (
+        Path(__file__).resolve().parents[2]
+        / "infrastructure"
+        / "cloudformation"
+        / "ml-factory.yaml"
+    ).read_text()
+
+    for parameter in _run_main_with_everything_stubbed():
+        assert f"  {parameter['ParameterKey']}:" in template, (
+            f"{parameter['ParameterKey']} is not a Parameter in ml-factory.yaml"
+        )
+
+
+def test_the_bedrock_model_reaches_the_stack_so_the_backend_role_may_invoke_it(monkeypatch):
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+
+    parameters = {
+        p["ParameterKey"]: p["ParameterValue"] for p in _run_main_with_everything_stubbed()
+    }
+
+    assert parameters["BedrockModelId"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+
 def test_by_default_no_existing_role_is_passed_so_the_template_creates_all_three():
     parameters = {
         p["ParameterKey"]: p["ParameterValue"] for p in _run_main_with_everything_stubbed()

@@ -115,7 +115,8 @@ aws cloudformation deploy \
     "DefinitionsBucket=${DEFINITIONS_BUCKET}" \
     "ExistingBackendRoleArn=${EXISTING_BACKEND_ROLE_ARN:-}" \
     "ExistingWorkflowRoleArn=${EXISTING_WORKFLOW_ROLE_ARN:-}" \
-    "ExistingJobRoleArn=${EXISTING_JOB_ROLE_ARN:-}"
+    "ExistingJobRoleArn=${EXISTING_JOB_ROLE_ARN:-}" \
+    "BedrockModelId=${BEDROCK_MODEL_ID:-}"
 
 echo
 echo "Done. Copy these into config/secrets/config.py:"

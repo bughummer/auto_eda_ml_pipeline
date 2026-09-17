@@ -35,6 +35,8 @@ Optional:
     Each Existing*RoleArn role must already carry the matching policy in infrastructure/iam/
     (backend_role_policy.json / workflow_role_policy.json / job_role_policy.json) — this
     script does not create or modify a role you supply.
+    BEDROCK_MODEL_ID        the one model the control plane may invoke; unset grants it no
+                            bedrock:InvokeModel at all. Match config/secrets/config.py.
     SKIP_IMAGE_BUILD ("1"/"true")   for when Docker and this script run on two different
     machines. Skips docker_login/build/push and instead prints the exact commands to run on
     the Docker-capable host, then continues on to the workflow upload and the CloudFormation
@@ -94,6 +96,7 @@ _RECOGNISED_KEYS = (
     "EXISTING_BACKEND_ROLE_ARN",
     "EXISTING_WORKFLOW_ROLE_ARN",
     "EXISTING_JOB_ROLE_ARN",
+    "BEDROCK_MODEL_ID",
     "SKIP_IMAGE_BUILD",
 )
 
@@ -511,6 +514,7 @@ def _deploy_inputs() -> tuple[str, str, str, dict[str, str]]:
         "ExistingBackendRoleArn": env("EXISTING_BACKEND_ROLE_ARN"),
         "ExistingWorkflowRoleArn": env("EXISTING_WORKFLOW_ROLE_ARN"),
         "ExistingJobRoleArn": env("EXISTING_JOB_ROLE_ARN"),
+        "BedrockModelId": env("BEDROCK_MODEL_ID"),
     }
     return region, stack_name, image_uri, parameters
 

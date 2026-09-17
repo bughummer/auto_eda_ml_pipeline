@@ -149,6 +149,47 @@ def test_a_role_created_by_this_template_is_never_referenced_without_its_conditi
     walk(template["Outputs"], guard=None)
 
 
+@pytest.mark.parametrize(
+    ("reference", "resource"),
+    [
+        ("backend_role_policy.json", "BackendRole"),
+        ("workflow_role_policy.json", "WorkflowRole"),
+        ("job_role_policy.json", "JobRole"),
+    ],
+)
+def test_each_role_grants_exactly_what_its_reference_policy_documents(
+    template, reference, resource
+):
+    """infrastructure/iam/*.json is the reference version of each role, and the template holds
+    the deployed equivalent — two copies of one intent, which drift silently. They have, twice:
+    the workflow role lost the log-delivery actions Step Functions needs to create a state
+    machine with logging at all, and the backend role lost bedrock:InvokeModel. Neither shows
+    up until AWS refuses something at deploy or at runtime, so compare them here instead.
+    """
+    import json
+
+    def actions(statements) -> set[str]:
+        granted: set[str] = set()
+        for statement in statements:
+            # A conditional statement is an Fn::If whose true-branch is the statement itself.
+            if "Fn::If" in statement:
+                statement = statement["Fn::If"][1]
+            action = statement["Action"]
+            granted |= {action} if isinstance(action, str) else set(action)
+        return granted
+
+    reference_path = TEMPLATE.parents[1] / "iam" / reference
+    documented = actions(json.loads(reference_path.read_text())["Statement"])
+    policy = template["Resources"][resource]["Properties"]["Policies"][0]
+    deployed = actions(policy["PolicyDocument"]["Statement"])
+
+    assert deployed == documented, (
+        f"{resource} and {reference} disagree — "
+        f"only in the reference: {sorted(documented - deployed)}, "
+        f"only in the template: {sorted(deployed - documented)}"
+    )
+
+
 def test_cfn_lint_is_clean():
     cfnlint_api = pytest.importorskip("cfnlint.api", reason="cfn-lint not installed")
 

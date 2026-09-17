@@ -48,6 +48,14 @@ Parameters:
   MaxRuntimeSeconds:
     Type: Number
     Default: 7200
+  BedrockModelId:
+    Type: String
+    Default: ''
+    Description: >-
+      The one foundation model the control plane may invoke, e.g.
+      anthropic.claude-3-5-sonnet-20241022-v2:0. Left empty, MlFactoryBackendRole is granted no
+      bedrock:InvokeModel at all — the LLM is optional, and no wildcard stands in for a model
+      nobody named.
   ExistingBackendRoleArn:
     Type: String
     Default: ''
@@ -71,6 +79,7 @@ Parameters:
       infrastructure/iam/job_role_policy.json; this template will not attach anything to it.
 
 Conditions:
+  GrantBedrock: !Not [!Equals [!Ref BedrockModelId, '']]
   CreateBackendRole: !Equals [!Ref ExistingBackendRoleArn, '']
   CreateWorkflowRole: !Equals [!Ref ExistingWorkflowRoleArn, '']
   CreateJobRole: !Equals [!Ref ExistingJobRoleArn, '']
@@ -209,6 +218,20 @@ Resources:
               - Effect: Allow
                 Action: ['kms:Decrypt', 'kms:GenerateDataKey']
                 Resource: !GetAtt ArtifactKey.Arn
+              # Step Functions' own logging, per LoggingConfiguration below. The vended-log
+              # delivery APIs have no resource-level form, so AWS requires these on '*' — and
+              # without them the state machines fail to create at all, not merely to log.
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:GetLogDelivery'
+                  - 'logs:UpdateLogDelivery'
+                  - 'logs:DeleteLogDelivery'
+                  - 'logs:ListLogDeliveries'
+                  - 'logs:PutResourcePolicy'
+                  - 'logs:DescribeResourcePolicies'
+                  - 'logs:DescribeLogGroups'
+                Resource: '*'
 
   BackendRole:
     Type: AWS::IAM::Role
@@ -252,6 +275,14 @@ Resources:
               - Effect: Allow
                 Action: ['kms:Decrypt', 'kms:GenerateDataKey']
                 Resource: !GetAtt ArtifactKey.Arn
+              # One model, named at deploy time. Left empty, the control plane gets no Bedrock
+              # access at all rather than a wildcard over every foundation model.
+              - !If
+                - GrantBedrock
+                - Effect: Allow
+                  Action: ['bedrock:InvokeModel']
+                  Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+                - !Ref 'AWS::NoValue'
 
   WorkflowLogGroup:
     Type: AWS::Logs::LogGroup
