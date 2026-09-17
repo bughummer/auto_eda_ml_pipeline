@@ -332,6 +332,89 @@ def test_a_required_variable_left_unset_fails_fast(monkeypatch):
         deploy_aws.env("AWS_REGION", required=True)
 
 
+# --- --diagnose: the itemized errors a bare "Validation failed" hides everywhere else -------
+
+
+def test_diagnose_stack_uses_a_disposable_stack_name_never_the_real_one():
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "arn:...:changeset/diagnose/abc"}
+    cfn.describe_change_set.return_value = {
+        "Status": "FAILED",
+        "StatusReason": "Resource JobRole: RoleName must be...",
+    }
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    assert cfn.create_change_set.call_args.kwargs["StackName"] == "ml-factory-diagnose"
+    assert cfn.create_change_set.call_args.kwargs["ChangeSetType"] == "CREATE"
+    cfn.delete_change_set.assert_called_once_with(ChangeSetName="arn:...:changeset/diagnose/abc")
+    cfn.delete_stack.assert_called_once_with(StackName="ml-factory-diagnose")
+
+
+def test_diagnose_stack_prints_the_itemized_status_reason(capsys):
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {
+        "Status": "FAILED",
+        "StatusReason": "Resource JobRole: RoleName must be...",
+    }
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    out = capsys.readouterr().out
+    assert "Resource JobRole: RoleName must be..." in out
+
+
+def test_diagnose_stack_survives_a_waiter_timeout_and_still_reports_and_cleans_up():
+    """The change set itself may never leave CREATE_PENDING/CREATE_IN_PROGRESS on failure; the
+    diagnostic must still report whatever it has and clean up rather than crash."""
+    from botocore.exceptions import WaiterError
+
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.get_waiter.return_value.wait.side_effect = WaiterError(
+        name="ChangeSetCreateComplete", reason="terminal failure", last_response={}
+    )
+    cfn.describe_change_set.return_value = {"Status": "FAILED", "StatusReason": "some reason"}
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    cfn.delete_change_set.assert_called_once_with(ChangeSetName="cs-id")
+    cfn.delete_stack.assert_called_once_with(StackName="ml-factory-diagnose")
+
+
+def test_diagnose_stack_tolerates_the_throwaway_stack_already_being_gone():
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {"Status": "FAILED", "StatusReason": "x"}
+    cfn.delete_stack.side_effect = FakeClientError("Stack ml-factory-diagnose does not exist")
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+
+def test_diagnose_entrypoint_gathers_the_same_inputs_as_main(monkeypatch):
+    monkeypatch.setenv("STACK_NAME", "custom-stack")
+    session = MagicMock()
+    cfn = session.client.return_value
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {"Status": "FAILED", "StatusReason": "x"}
+
+    with patch("deploy_aws.build_session", return_value=session):
+        deploy_aws.diagnose()
+
+    assert cfn.create_change_set.call_args.kwargs["StackName"] == "custom-stack-diagnose"
+    parameters = {
+        p["ParameterKey"]: p["ParameterValue"]
+        for p in cfn.create_change_set.call_args.kwargs["Parameters"]
+    }
+    assert parameters["ArtifactBucketName"] == "my-artifacts"
+
+
 # --- main(): the existing-role parameters actually reach CloudFormation ---------
 
 

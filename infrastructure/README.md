@@ -191,6 +191,22 @@ CloudFormation stack in the same run: the stack does not check that the image al
 ECR, only that it exists by the time a job actually starts, so the order between "paste those
 three commands elsewhere" and "the stack finishes deploying" does not matter.
 
+### Diagnosing a bare "Validation failed with N error(s)"
+
+If a create or update fails with only that generic message on the stack itself — no specific
+resource in the failure list — CloudFormation's own template/schema validation rejected
+something before it touched a single resource, and `DescribeStackEvents` never carries the
+itemized detail for this failure mode. Run:
+
+```bash
+python scripts/deploy_aws.py --diagnose
+```
+
+It creates a disposable change set (against `<stack name>-diagnose`, never the real stack) with
+the same template and parameters, prints the change set's actual `StatusReason` — which does
+carry the itemized errors this failure mode hides everywhere else — then deletes the change set
+and the throwaway stack it had to create to hold it.
+
 ## Running the control plane
 
 The control plane is one container on the corporate server — the one permanently available host

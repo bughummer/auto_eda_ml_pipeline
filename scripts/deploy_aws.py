@@ -9,6 +9,11 @@ goes through boto3 directly.
 
     python scripts/deploy_aws.py
 
+    # If a create/update fails with a bare "Validation failed with N error(s)" and no other
+    # detail (CloudFormation's own template/schema validation, rejected before any resource is
+    # touched — DescribeStackEvents never carries the itemized errors for this failure mode):
+    python scripts/deploy_aws.py --diagnose
+
 Every setting below can be an environment variable, or a line in config/secrets/deploy.py
 (copy config/secrets/deploy.sample.py) — the environment wins where both are set. Nothing
 requires `export`; a filled-in deploy.py alone is enough to run this script.
@@ -53,6 +58,7 @@ of any shape is otherwise written to a file or logged by this script.
 from __future__ import annotations
 
 import base64
+import contextlib
 import importlib.util
 import os
 import shlex
@@ -371,7 +377,9 @@ def print_outputs(cfn, stack_name: str) -> None:
         print(f"  {output['OutputKey']:<{width}}  {output['OutputValue']}")
 
 
-def main() -> None:
+def _deploy_inputs() -> tuple[str, str, str, dict[str, str]]:
+    """The settings shared by main() and --diagnose: (region, stack_name, image_uri,
+    stack_parameters), read the same way every time."""
     region = env("AWS_REGION", required=True)
     account_id = env("AWS_ACCOUNT_ID", required=True)
     artifact_bucket = env("ARTIFACT_BUCKET", required=True)
@@ -380,13 +388,70 @@ def main() -> None:
     approved_data_prefix = env("APPROVED_DATA_PREFIX", "curated")
     stack_name = env("STACK_NAME", "ml-factory")
     image_tag = env("IMAGE_TAG") or git_short_sha()
-    existing_backend_role_arn = env("EXISTING_BACKEND_ROLE_ARN")
-    existing_workflow_role_arn = env("EXISTING_WORKFLOW_ROLE_ARN")
-    existing_job_role_arn = env("EXISTING_JOB_ROLE_ARN")
 
-    repository = "ml-factory-jobs"
     registry = f"{account_id}.dkr.ecr.{region}.amazonaws.com"
-    image_uri = f"{registry}/{repository}:{image_tag}"
+    image_uri = f"{registry}/ml-factory-jobs:{image_tag}"
+
+    parameters = {
+        "ArtifactBucketName": artifact_bucket,
+        "ApprovedDataBucketName": approved_data_bucket,
+        "ApprovedDataPrefix": approved_data_prefix,
+        "JobImageUri": image_uri,
+        "DefinitionsBucket": definitions_bucket,
+        "ExistingBackendRoleArn": env("EXISTING_BACKEND_ROLE_ARN"),
+        "ExistingWorkflowRoleArn": env("EXISTING_WORKFLOW_ROLE_ARN"),
+        "ExistingJobRoleArn": env("EXISTING_JOB_ROLE_ARN"),
+    }
+    return region, stack_name, image_uri, parameters
+
+
+def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
+    """For a CREATE_FAILED stack whose only failing "resource" is the stack itself, reason
+    "Validation failed with N error(s)...": that is CloudFormation's own schema validation
+    rejecting the template before it touches a single resource, and DescribeStackEvents never
+    carries the itemized detail for this failure mode — only a change set's StatusReason does.
+    Runs against a disposable, differently-named stack so the real one is never touched.
+    """
+    from botocore.exceptions import WaiterError
+
+    diagnostic_name = f"{stack_name}-diagnose"
+    template_body = (ROOT / "infrastructure" / "cloudformation" / "ml-factory.yaml").read_text()
+    cfn_parameters = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
+
+    print(f"==> Creating a disposable change set ({diagnostic_name}) to see the full errors")
+    created = cfn.create_change_set(
+        StackName=diagnostic_name,
+        TemplateBody=template_body,
+        Parameters=cfn_parameters,
+        Capabilities=["CAPABILITY_NAMED_IAM"],
+        ChangeSetType="CREATE",
+        ChangeSetName="diagnose",
+    )
+    with contextlib.suppress(WaiterError):
+        cfn.get_waiter("change_set_create_complete").wait(ChangeSetName=created["Id"])
+
+    detail = cfn.describe_change_set(ChangeSetName=created["Id"])
+    print(f"    Status: {detail.get('Status')}")
+    print(f"    StatusReason: {detail.get('StatusReason', '(none)')}")
+
+    cfn.delete_change_set(ChangeSetName=created["Id"])
+    # A CREATE-type change set creates the stack (in REVIEW_IN_PROGRESS) even when the change
+    # set itself fails validation; clean it up so nothing disposable is left behind.
+    with contextlib.suppress(cfn.exceptions.ClientError):
+        cfn.delete_stack(StackName=diagnostic_name)
+
+
+def diagnose() -> None:
+    _region, stack_name, _image_uri, parameters = _deploy_inputs()
+    cfn = build_session().client("cloudformation")
+    diagnose_stack(cfn, stack_name=stack_name, parameters=parameters)
+
+
+def main() -> None:
+    region, stack_name, image_uri, parameters = _deploy_inputs()
+    account_id = env("AWS_ACCOUNT_ID", required=True)
+    registry = f"{account_id}.dkr.ecr.{region}.amazonaws.com"
+    repository = "ml-factory-jobs"
 
     session = build_session()
     ecr = session.client("ecr")
@@ -399,26 +464,15 @@ def main() -> None:
     else:
         docker_login(ecr, registry)
         build_and_push_image(image_uri)
-    upload_workflow_definitions(s3, definitions_bucket)
-    deploy_stack(
-        cfn,
-        stack_name=stack_name,
-        parameters={
-            "ArtifactBucketName": artifact_bucket,
-            "ApprovedDataBucketName": approved_data_bucket,
-            "ApprovedDataPrefix": approved_data_prefix,
-            "JobImageUri": image_uri,
-            "DefinitionsBucket": definitions_bucket,
-            "ExistingBackendRoleArn": existing_backend_role_arn,
-            "ExistingWorkflowRoleArn": existing_workflow_role_arn,
-            "ExistingJobRoleArn": existing_job_role_arn,
-        },
-    )
+    upload_workflow_definitions(s3, env("DEFINITIONS_BUCKET", required=True))
+    deploy_stack(cfn, stack_name=stack_name, parameters=parameters)
     print_outputs(cfn, stack_name)
 
 
 if __name__ == "__main__":
     if "--print-shell-exports" in sys.argv:
         print_shell_exports()
+    elif "--diagnose" in sys.argv:
+        diagnose()
     else:
         main()
