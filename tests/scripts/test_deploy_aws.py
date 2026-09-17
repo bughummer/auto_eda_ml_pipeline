@@ -109,12 +109,15 @@ def test_a_missing_stack_is_created_not_updated():
 def test_an_existing_stack_is_updated_not_recreated():
     cfn = MagicMock()
     cfn.exceptions.ClientError = FakeClientError
-    cfn.describe_stacks.return_value = {"Stacks": [{"StackName": "ml-factory"}]}
+    cfn.describe_stacks.return_value = {
+        "Stacks": [{"StackName": "ml-factory", "StackStatus": "CREATE_COMPLETE"}]
+    }
 
     deploy_aws.deploy_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
 
     cfn.update_stack.assert_called_once()
     cfn.create_stack.assert_not_called()
+    cfn.delete_stack.assert_not_called()
     cfn.get_waiter.assert_called_with("stack_update_complete")
 
 
@@ -122,7 +125,9 @@ def test_no_pending_changes_is_success_not_an_error():
     """update_stack raises for 'no changes' where the CLI's `deploy` swallows it. Match that."""
     cfn = MagicMock()
     cfn.exceptions.ClientError = FakeClientError
-    cfn.describe_stacks.return_value = {"Stacks": [{"StackName": "ml-factory"}]}
+    cfn.describe_stacks.return_value = {
+        "Stacks": [{"StackName": "ml-factory", "StackStatus": "CREATE_COMPLETE"}]
+    }
     cfn.update_stack.side_effect = FakeClientError(
         "An error occurred (ValidationError): No updates are to be performed."
     )
@@ -135,13 +140,69 @@ def test_no_pending_changes_is_success_not_an_error():
 def test_a_real_update_failure_is_not_swallowed():
     cfn = MagicMock()
     cfn.exceptions.ClientError = FakeClientError
-    cfn.describe_stacks.return_value = {"Stacks": [{"StackName": "ml-factory"}]}
+    cfn.describe_stacks.return_value = {
+        "Stacks": [{"StackName": "ml-factory", "StackStatus": "CREATE_COMPLETE"}]
+    }
     cfn.update_stack.side_effect = FakeClientError("AccessDenied")
 
     with pytest.raises(FakeClientError, match="AccessDenied"):
         deploy_aws.deploy_stack(
             cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"}
         )
+
+
+def test_a_stack_stuck_in_rollback_complete_is_deleted_then_recreated():
+    """CloudFormation refuses to update a ROLLBACK_COMPLETE stack; the only way forward is to
+    delete it and create it again."""
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.describe_stacks.return_value = {
+        "Stacks": [{"StackName": "ml-factory", "StackStatus": "ROLLBACK_COMPLETE"}]
+    }
+
+    deploy_aws.deploy_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    cfn.delete_stack.assert_called_once_with(StackName="ml-factory")
+    cfn.get_waiter.assert_any_call("stack_delete_complete")
+    cfn.create_stack.assert_called_once()
+    cfn.update_stack.assert_not_called()
+    cfn.get_waiter.assert_any_call("stack_create_complete")
+
+
+def test_a_failed_deploy_prints_the_actual_failing_resources_before_raising():
+    """A raw WaiterError only says 'ROLLBACK_COMPLETE'; the *_FAILED stack events carry the
+    reason (bad IAM trust policy, a bucket that already exists, ...) that a deployer needs."""
+    from botocore.exceptions import WaiterError
+
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.describe_stacks.side_effect = FakeClientError("Stack ml-factory does not exist")
+    cfn.get_waiter.return_value.wait.side_effect = WaiterError(
+        name="StackCreateComplete",
+        reason="Waiter encountered a terminal failure state",
+        last_response={},
+    )
+    cfn.describe_stack_events.return_value = {
+        "StackEvents": [
+            {
+                "LogicalResourceId": "ArtifactBucket",
+                "ResourceStatus": "CREATE_FAILED",
+                "ResourceStatusReason": "bucket-name already exists",
+            },
+            {
+                "LogicalResourceId": "ml-factory",
+                "ResourceStatus": "ROLLBACK_IN_PROGRESS",
+                "ResourceStatusReason": "",
+            },
+        ]
+    }
+
+    with pytest.raises(WaiterError):
+        deploy_aws.deploy_stack(
+            cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"}
+        )
+
+    cfn.describe_stack_events.assert_called_once_with(StackName="ml-factory")
 
 
 def test_a_repository_that_already_exists_is_not_recreated():

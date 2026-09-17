@@ -294,18 +294,47 @@ def upload_workflow_definitions(s3, bucket: str) -> None:
         s3.upload_file(str(path), bucket, key)
 
 
+def _stack_status(cfn, stack_name: str) -> str | None:
+    """None if the stack does not exist yet, otherwise its current StackStatus."""
+    try:
+        return cfn.describe_stacks(StackName=stack_name)["Stacks"][0]["StackStatus"]
+    except cfn.exceptions.ClientError as error:
+        if "does not exist" not in str(error):
+            raise
+        return None
+
+
+def _print_stack_failure_reasons(cfn, stack_name: str) -> None:
+    """CloudFormation's own waiters only report a status, not why — the *_FAILED events carry
+    the actual reason (an IAM error, a bucket that already exists, a bad parameter, ...)."""
+    print(f"    {stack_name} failed. The failing resources:")
+    events = cfn.describe_stack_events(StackName=stack_name)["StackEvents"]
+    for event in reversed(events):
+        if event["ResourceStatus"].endswith("_FAILED"):
+            reason = event.get("ResourceStatusReason", "")
+            print(f"      {event['LogicalResourceId']} ({event['ResourceStatus']}): {reason}")
+
+
 def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
+    from botocore.exceptions import WaiterError
+
     print(f"==> 4/4 Deploy the stack {stack_name}")
     template_body = (ROOT / "infrastructure" / "cloudformation" / "ml-factory.yaml").read_text()
     cfn_parameters = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
 
-    exists = True
-    try:
-        cfn.describe_stacks(StackName=stack_name)
-    except cfn.exceptions.ClientError as error:
-        if "does not exist" not in str(error):
-            raise
-        exists = False
+    status = _stack_status(cfn, stack_name)
+    if status == "ROLLBACK_COMPLETE":
+        # A stack stuck here is from a create that failed and rolled back; CloudFormation
+        # refuses to update it — the only way forward is to delete it and create it again.
+        print(
+            f"    {stack_name} is in ROLLBACK_COMPLETE from an earlier failed create;"
+            " deleting it before retrying"
+        )
+        cfn.delete_stack(StackName=stack_name)
+        cfn.get_waiter("stack_delete_complete").wait(
+            StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180}
+        )
+        status = None
 
     common = {
         "StackName": stack_name,
@@ -313,7 +342,7 @@ def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
         "Parameters": cfn_parameters,
         "Capabilities": ["CAPABILITY_NAMED_IAM"],
     }
-    if exists:
+    if status is not None:
         try:
             cfn.update_stack(**common)
         except cfn.exceptions.ClientError as error:
@@ -327,7 +356,11 @@ def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
         waiter = cfn.get_waiter("stack_create_complete")
 
     print("    waiting for CloudFormation...")
-    waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180})
+    try:
+        waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180})
+    except WaiterError:
+        _print_stack_failure_reasons(cfn, stack_name)
+        raise
 
 
 def print_outputs(cfn, stack_name: str) -> None:
