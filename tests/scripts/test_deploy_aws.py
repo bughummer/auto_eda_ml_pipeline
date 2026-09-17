@@ -475,6 +475,53 @@ def test_diagnose_stack_tolerates_the_throwaway_stack_already_being_gone():
     deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
 
 
+def test_raw_events_are_printed_whole_rather_than_filtered_to_known_fields(capsys):
+    """The point of the raw dump is that it survives a failure reported through a field this
+    script does not know about, so every key has to reach the terminal."""
+    cfn = MagicMock()
+    cfn.describe_stack_events.return_value = {
+        "StackEvents": [
+            {
+                "LogicalResourceId": "ml-factory",
+                "SomeFieldNobodyAnticipated": "the actual reason",
+                "Timestamp": "2026-09-17T00:00:00Z",
+            }
+        ]
+    }
+
+    deploy_aws.print_raw_stack_events(cfn, "ml-factory")
+
+    out = capsys.readouterr().out
+    assert "SomeFieldNobodyAnticipated" in out
+    assert "the actual reason" in out
+
+
+def test_raw_events_report_a_missing_stack_instead_of_raising(capsys):
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.describe_stack_events.side_effect = FakeClientError("Stack gone does not exist")
+
+    deploy_aws.print_raw_stack_events(cfn, "gone")
+
+    assert "no events" in capsys.readouterr().out
+
+
+def test_diagnose_dumps_the_real_stacks_events_before_probing_with_a_change_set():
+    """The real stack is the one that attempted a create, so its events hold the hook's
+    complaint; the change set never gets far enough to post any of its own."""
+    session = MagicMock()
+    cfn = session.client.return_value
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {"Status": "FAILED", "StatusReason": "x"}
+    cfn.describe_stack_events.return_value = {"StackEvents": []}
+
+    with patch("deploy_aws.build_session", return_value=session):
+        deploy_aws.diagnose()
+
+    assert cfn.describe_stack_events.call_args_list[0].kwargs == {"StackName": "ml-factory"}
+
+
 def test_diagnose_entrypoint_gathers_the_same_inputs_as_main(monkeypatch):
     monkeypatch.setenv("STACK_NAME", "custom-stack")
     session = MagicMock()

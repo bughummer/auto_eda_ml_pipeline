@@ -60,6 +60,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import importlib.util
+import json
 import os
 import shlex
 import subprocess
@@ -457,9 +458,30 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
         cfn.delete_stack(StackName=diagnostic_name)
 
 
+def print_raw_stack_events(cfn, stack_name: str, *, limit: int = 25) -> None:
+    """Every field of the most recent events, verbatim.
+
+    A failure that reports through fields this script does not anticipate — an Early Validation
+    hook was the case that forced this — is invisible to any reporter that filters on the
+    fields it happens to know about. So print what CloudFormation actually returned and read it,
+    rather than guessing which key the answer is under.
+    """
+    print(f"==> Raw stack events for {stack_name} (most recent {limit})")
+    try:
+        events = cfn.describe_stack_events(StackName=stack_name)["StackEvents"][:limit]
+    except cfn.exceptions.ClientError as error:
+        print(f"    (no events: {error})")
+        return
+    for event in events:
+        print(json.dumps(event, indent=2, default=str, sort_keys=True))
+
+
 def diagnose() -> None:
     _region, stack_name, _image_uri, parameters = _deploy_inputs()
     cfn = build_session().client("cloudformation")
+    # The real stack is the one that actually attempted a create, so it is the one whose events
+    # carry the hook's own complaint; the change-set probe below never gets that far.
+    print_raw_stack_events(cfn, stack_name)
     diagnose_stack(cfn, stack_name=stack_name, parameters=parameters)
 
 
