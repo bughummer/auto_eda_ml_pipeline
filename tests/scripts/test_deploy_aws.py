@@ -332,6 +332,55 @@ def test_a_required_variable_left_unset_fails_fast(monkeypatch):
         deploy_aws.env("AWS_REGION", required=True)
 
 
+def test_a_failed_validation_hook_is_reported_although_it_carries_no_resource_status(capsys):
+    """An Early Validation failure — the thing that rejects a template referencing a resource
+    that does not exist — reports through HookStatus/HookStatusReason and has no ResourceStatus
+    at all, so a reporter reading only ResourceStatus hides exactly the failure that matters."""
+    cfn = MagicMock()
+
+    cfn.describe_stack_events.return_value = {
+        "StackEvents": [
+            {
+                "LogicalResourceId": "ml-factory",
+                "HookType": "AWS::EarlyValidation::ResourceExistenceCheck",
+                "HookStatus": "HOOK_COMPLETE_FAILED",
+                "HookStatusReason": "s3://definitions/ml-factory/eda.asl.json does not exist",
+            }
+        ]
+    }
+
+    deploy_aws._print_stack_failure_reasons(cfn, "ml-factory")
+
+    out = capsys.readouterr().out
+    assert "AWS::EarlyValidation::ResourceExistenceCheck" in out
+    assert "s3://definitions/ml-factory/eda.asl.json does not exist" in out
+
+
+def test_both_kinds_of_failure_event_are_reported_together(capsys):
+    cfn = MagicMock()
+    cfn.describe_stack_events.return_value = {
+        "StackEvents": [
+            {
+                "LogicalResourceId": "ArtifactBucket",
+                "ResourceStatus": "CREATE_FAILED",
+                "ResourceStatusReason": "bucket already exists",
+            },
+            {
+                "LogicalResourceId": "ml-factory",
+                "HookType": "AWS::EarlyValidation::ResourceExistenceCheck",
+                "HookStatus": "HOOK_COMPLETE_FAILED",
+                "HookStatusReason": "role arn:aws:iam::1:role/Nope does not exist",
+            },
+        ]
+    }
+
+    deploy_aws._print_stack_failure_reasons(cfn, "ml-factory")
+
+    out = capsys.readouterr().out
+    assert "bucket already exists" in out
+    assert "role arn:aws:iam::1:role/Nope does not exist" in out
+
+
 # --- --diagnose: the itemized errors a bare "Validation failed" hides everywhere else -------
 
 
@@ -360,11 +409,41 @@ def test_diagnose_stack_prints_the_itemized_status_reason(capsys):
         "Status": "FAILED",
         "StatusReason": "Resource JobRole: RoleName must be...",
     }
+    cfn.describe_stack_events.return_value = {"StackEvents": []}
 
     deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
 
     out = capsys.readouterr().out
     assert "Resource JobRole: RoleName must be..." in out
+
+
+def test_diagnose_stack_reports_which_resource_a_failed_hook_objected_to(capsys):
+    """The change set's own StatusReason names only the hook; the stack events name the
+    resource. Both have to be read, and the events before the cleanup deletes the stack."""
+    cfn = MagicMock()
+    cfn.exceptions.ClientError = FakeClientError
+    cfn.create_change_set.return_value = {"Id": "cs-id"}
+    cfn.describe_change_set.return_value = {
+        "Status": "FAILED",
+        "StatusReason": "The following hook(s)/validation failed: "
+        "[AWS::EarlyValidation::ResourceExistenceCheck].",
+    }
+    cfn.describe_stack_events.return_value = {
+        "StackEvents": [
+            {
+                "LogicalResourceId": "ml-factory-diagnose",
+                "HookType": "AWS::EarlyValidation::ResourceExistenceCheck",
+                "HookStatus": "HOOK_COMPLETE_FAILED",
+                "HookStatusReason": "the bucket my-definitions does not exist",
+            }
+        ]
+    }
+
+    deploy_aws.diagnose_stack(cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"})
+
+    out = capsys.readouterr().out
+    assert "the bucket my-definitions does not exist" in out
+    cfn.describe_stack_events.assert_called_once_with(StackName="ml-factory-diagnose")
 
 
 def test_diagnose_stack_survives_a_waiter_timeout_and_still_reports_and_cleans_up():

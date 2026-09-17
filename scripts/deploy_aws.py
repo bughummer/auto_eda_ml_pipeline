@@ -311,14 +311,25 @@ def _stack_status(cfn, stack_name: str) -> str | None:
 
 
 def _print_stack_failure_reasons(cfn, stack_name: str) -> None:
-    """CloudFormation's own waiters only report a status, not why — the *_FAILED events carry
-    the actual reason (an IAM error, a bucket that already exists, a bad parameter, ...)."""
+    """CloudFormation's own waiters only report a status, not why — the failing events carry
+    the actual reason (an IAM error, a bucket that already exists, a bad parameter, ...).
+
+    Two different kinds of event have to be read for that. A resource failure reports through
+    ResourceStatus/ResourceStatusReason. A *hook* failure — an Early Validation check, say,
+    which is what rejects a template referencing a resource that does not exist — reports
+    through HookStatus/HookStatusReason instead and leaves ResourceStatus absent entirely, so
+    reading only the first kind makes exactly the failure that needs explaining invisible.
+    """
     print(f"    {stack_name} failed. The failing resources:")
     events = cfn.describe_stack_events(StackName=stack_name)["StackEvents"]
     for event in reversed(events):
-        if event["ResourceStatus"].endswith("_FAILED"):
+        if event.get("ResourceStatus", "").endswith("_FAILED"):
             reason = event.get("ResourceStatusReason", "")
             print(f"      {event['LogicalResourceId']} ({event['ResourceStatus']}): {reason}")
+        if event.get("HookStatus", "").endswith("_FAILED"):
+            hook = event.get("HookType", "hook")
+            reason = event.get("HookStatusReason", "")
+            print(f"      {event['LogicalResourceId']} [{hook}]: {reason}")
 
 
 def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
@@ -433,6 +444,11 @@ def diagnose_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
     detail = cfn.describe_change_set(ChangeSetName=created["Id"])
     print(f"    Status: {detail.get('Status')}")
     print(f"    StatusReason: {detail.get('StatusReason', '(none)')}")
+
+    # A failed validation hook names only itself here; which resource it objected to is in the
+    # stack's own events. Read them before the cleanup below takes the stack away.
+    with contextlib.suppress(cfn.exceptions.ClientError):
+        _print_stack_failure_reasons(cfn, diagnostic_name)
 
     cfn.delete_change_set(ChangeSetName=created["Id"])
     # A CREATE-type change set creates the stack (in REVIEW_IN_PROGRESS) even when the change
