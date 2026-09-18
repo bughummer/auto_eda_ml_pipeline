@@ -380,7 +380,11 @@ def print_manual_image_commands(registry: str, image_uri: str, *, region: str) -
     mounted `~/.aws` profile — no Python required for either).
     """
     print(f"==> 2/4 Build and push the job image {image_uri} (SKIP_IMAGE_BUILD set)")
-    print("    Run these on your Docker-capable host, from the repository root:")
+    print("    Run these on your Docker-capable host, from the repository root.")
+    print("    That host needs the aws CLI and AWS credentials of its own (env vars or")
+    print("    ~/.aws) — it cannot borrow this machine's. If docker needs sudo there, all")
+    print("    three lines need it: the login is stored per user, and a login as you with a")
+    print("    push as root fails with 'no basic auth credentials'.")
     print()
     print(
         f"    aws ecr get-login-password --region {region} | "
