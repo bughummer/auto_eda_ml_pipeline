@@ -257,7 +257,7 @@ PREFLIGHT_PARAMETERS = {
 }
 
 
-def _session(*, taken: set[str] = frozenset(), stack_exists: bool = False) -> MagicMock:
+def _session(*, taken: set[str] = frozenset(), stack_status: str | None = None) -> MagicMock:
     """A session whose head_bucket answers per bucket: 404 unless the name is taken."""
     session = MagicMock()
     client = session.client.return_value
@@ -269,8 +269,8 @@ def _session(*, taken: set[str] = frozenset(), stack_exists: bool = False) -> Ma
 
     client.head_bucket.side_effect = head_bucket
     client.exceptions.ClientError = FakeClientError
-    if stack_exists:
-        client.describe_stacks.return_value = {"Stacks": [{"StackStatus": "CREATE_COMPLETE"}]}
+    if stack_status is not None:
+        client.describe_stacks.return_value = {"Stacks": [{"StackStatus": stack_status}]}
     else:
         client.describe_stacks.side_effect = FakeClientError("Stack ml-factory does not exist")
     return session
@@ -327,9 +327,28 @@ def test_an_artifact_bucket_taken_by_another_account_is_still_taken(capsys):
 
 
 def test_a_redeploy_accepts_the_artifact_bucket_the_stack_already_owns():
-    session = _session(taken={"my-data", "my-definitions", "my-artifacts"}, stack_exists=True)
+    session = _session(
+        taken={"my-data", "my-definitions", "my-artifacts"}, stack_status="CREATE_COMPLETE"
+    )
 
     deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
+
+
+def test_a_bucket_retained_by_a_rolled_back_stack_is_a_conflict_not_a_redeploy(capsys):
+    """ROLLBACK_COMPLETE is not a redeploy: deploy_stack discards that stack and creates a new
+    one, so the name has to be free — and the template's retain-on-rollback for this bucket is
+    exactly what takes it. Reading the state as "the stack owns it" hides the conflict until
+    CloudFormation reports it as an opaque validation failure."""
+    session = _session(
+        taken={"my-data", "my-definitions", "my-artifacts"}, stack_status="ROLLBACK_COMPLETE"
+    )
+
+    with pytest.raises(SystemExit):
+        deploy_aws.preflight(session, PREFLIGHT_PARAMETERS, stack_name="ml-factory")
+
+    err = capsys.readouterr().err
+    assert "ARTIFACT_BUCKET" in err
+    assert "ROLLBACK_COMPLETE" in err
 
 
 def test_preflight_ignores_empty_role_arns_because_the_stack_creates_those_roles():

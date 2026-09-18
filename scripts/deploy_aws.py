@@ -287,13 +287,28 @@ def preflight(session, parameters: dict[str, str], *, stack_name: str) -> None:
     artifact_bucket = parameters["ArtifactBucketName"]
     if _bucket_name_taken(s3, artifact_bucket):
         cfn = session.client("cloudformation")
-        if _stack_status(cfn, stack_name) is None:
+        status = _stack_status(cfn, stack_name)
+        if status == "ROLLBACK_COMPLETE":
+            # Not a redeploy: deploy_stack discards a stack in this state and creates a new
+            # one, so the name has to be free exactly as for a first create. This is also how
+            # it got taken — the template retains this bucket through a rollback, on purpose,
+            # because it holds the experiment records.
+            problems.append(
+                f"ARTIFACT_BUCKET={artifact_bucket!r}: left behind by the failed attempt that"
+                f" put {stack_name} in ROLLBACK_COMPLETE — the template keeps this bucket"
+                " through a rollback rather than destroy experiment records. This run would"
+                " recreate the stack, which needs the name free: delete the bucket (it is"
+                " empty if no experiment ever ran) and rerun, or pick another name."
+            )
+        elif status is None:
             problems.append(
                 f"ARTIFACT_BUCKET={artifact_bucket!r}: already exists, and the stack creates it."
                 " S3 bucket names are global, so this may well be someone else's — pick a name"
                 " nothing has taken (ml-factory-artifacts-<account id>-<region>, say). If it is"
                 " yours from an earlier attempt, delete it or choose another name."
             )
+        else:
+            print(f"    ARTIFACT_BUCKET s3://{artifact_bucket} already the stack's own")
     else:
         print(f"    ARTIFACT_BUCKET s3://{artifact_bucket} free to create")
 
