@@ -234,6 +234,15 @@ For credentials, in order of preference:
    grant that user `sts:AssumeRole` on the role ARN and nothing else. The file is gitignored;
    rotate on your normal schedule.
 
+Gitignored is not the same as unreadable. `.gitignore` keeps these files out of the repository;
+it says nothing about who on the host can read them, and a file created with the usual umask is
+world-readable. On a shared server set the permissions explicitly — `chmod 600` on `.env`,
+`config/secrets/config.py` and `config/secrets/deploy.py`, `chmod 700` on `config/secrets` — and
+keep the checkout off a shared mount, since a group-writable parent directory lets others
+replace a file whose own permissions are strict. Prefer the mounted profile above to either
+file, and prefer a file to `.env`: compose puts `.env` values into the container environment,
+where `docker inspect` shows them to anyone who can reach the Docker socket.
+
 `GET /api/v1/health` reports which credential source is in effect — without ever returning a
 credential — and lists any configuration that would fail at runtime, so a misconfigured
 deployment says so up front instead of failing on the first experiment.
