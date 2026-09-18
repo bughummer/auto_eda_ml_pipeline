@@ -478,8 +478,14 @@ def deploy_stack(cfn, *, stack_name: str, parameters: dict[str, str]) -> None:
     try:
         waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180})
     except WaiterError:
+        # Both, because they answer different failures: a resource that failed to create says
+        # so in the stack events, while a template CloudFormation rejected before touching any
+        # resource is only itemized by DescribeEvents. Whichever this was, it is named here
+        # rather than left for a second command to go and ask for.
         _print_stack_failure_reasons(cfn, stack_name)
-        raise
+        print_operation_events(cfn, StackName=stack_name)
+        # The traceback below this carries nothing the events above do not.
+        sys.exit(1)
 
 
 def print_outputs(cfn, stack_name: str) -> None:

@@ -190,7 +190,7 @@ def test_a_stack_stuck_in_rollback_complete_is_deleted_then_recreated():
     cfn.get_waiter.assert_any_call("stack_create_complete")
 
 
-def test_a_failed_deploy_prints_the_actual_failing_resources_before_raising():
+def test_a_failed_deploy_prints_the_actual_failing_resources_before_exiting():
     """A raw WaiterError only says 'ROLLBACK_COMPLETE'; the *_FAILED stack events carry the
     reason (bad IAM trust policy, a bucket that already exists, ...) that a deployer needs."""
     from botocore.exceptions import WaiterError
@@ -198,6 +198,7 @@ def test_a_failed_deploy_prints_the_actual_failing_resources_before_raising():
     cfn = MagicMock()
     cfn.exceptions.ClientError = FakeClientError
     cfn.describe_stacks.side_effect = FakeClientError("Stack ml-factory does not exist")
+    cfn.describe_events.return_value = {"OperationEvents": []}
     cfn.get_waiter.return_value.wait.side_effect = WaiterError(
         name="StackCreateComplete",
         reason="Waiter encountered a terminal failure state",
@@ -218,12 +219,15 @@ def test_a_failed_deploy_prints_the_actual_failing_resources_before_raising():
         ]
     }
 
-    with pytest.raises(WaiterError):
+    with pytest.raises(SystemExit):
         deploy_aws.deploy_stack(
             cfn, stack_name="ml-factory", parameters={"ArtifactBucketName": "b"}
         )
 
     cfn.describe_stack_events.assert_called_once_with(StackName="ml-factory")
+    # The itemized detail too: a template rejected before any resource is touched leaves no
+    # resource events at all, and only this call names what it objected to.
+    assert cfn.describe_events.call_args.kwargs["StackName"] == "ml-factory"
 
 
 # --- preflight: name the wrong setting instead of leaving a CloudFormation post-mortem -----
