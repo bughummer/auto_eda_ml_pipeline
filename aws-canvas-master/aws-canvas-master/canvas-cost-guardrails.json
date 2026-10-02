@@ -1,0 +1,146 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyStandardBuildAllowQuickBuildOnly",
+      "Effect": "Deny",
+      "Action": "sagemaker:CreateAutoMLJob",
+      "Resource": "*",
+      "Condition": {
+        "NumericGreaterThan": {
+          "sagemaker:MaxCandidates": "5"
+        }
+      }
+    },
+    {
+      "Sid": "DenyModelStorage",
+      "Effect": "Deny",
+      "Action": [
+        "sagemaker:CreateModel",
+        "sagemaker:CreateModelPackage",
+        "sagemaker:CreateModelPackageGroup",
+        "sagemaker:UpdateModelPackage",
+        "sagemaker:DeleteModelPackage",
+        "sagemaker:CreateModelCard",
+        "sagemaker:RegisterModel"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyModelDeployment",
+      "Effect": "Deny",
+      "Action": [
+        "sagemaker:CreateEndpoint",
+        "sagemaker:CreateEndpointConfig",
+        "sagemaker:UpdateEndpoint",
+        "sagemaker:UpdateEndpointWeightsAndCapacities",
+        "sagemaker:CreateInferenceRecommendationsJob",
+        "sagemaker:CreateCompilationJob"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyExpensiveTrainingInstances",
+      "Effect": "Deny",
+      "Action": [
+        "sagemaker:CreateTrainingJob",
+        "sagemaker:CreateHyperParameterTuningJob",
+        "sagemaker:CreateProcessingJob",
+        "sagemaker:CreateAutoMLJob",
+        "sagemaker:CreateNotebookInstance",
+        "sagemaker:CreateApp"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringLike": {
+          "sagemaker:InstanceTypes": [
+            "ml.r*",
+            "ml.x*",
+            "ml.p*",
+            "ml.g*",
+            "ml.trn*",
+            "ml.inf*",
+            "ml.m5.8xlarge",
+            "ml.m5.12xlarge",
+            "ml.m5.16xlarge",
+            "ml.m5.24xlarge",
+            "ml.m6i.*",
+            "ml.c5.4xlarge",
+            "ml.c5.9xlarge",
+            "ml.c5.18xlarge",
+            "ml.c6i.*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "AllowOnlyCanvasAndSageMakerBuckets",
+      "Effect": "Deny",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "NotResource": [
+        "arn:aws:s3:::canvas-datasets-vorujzada",
+        "arn:aws:s3:::canvas-datasets-vorujzada/*",
+        "arn:aws:s3:::sagemaker-us-east-1-857753985214",
+        "arn:aws:s3:::sagemaker-us-east-1-857753985214/*",
+        "arn:aws:s3:::azc-ml-prj-*",
+        "arn:aws:s3:::azc-ml-prj-*/*"
+      ]
+    },
+    {
+      "Sid": "DenyS3BucketCreationDeletion",
+      "Effect": "Deny",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket"
+      ],
+      "NotResource": "arn:aws:s3:::azc-ml-prj-*"
+    },
+    {
+      "Sid": "DenyBedrockFineTuningAndExpensiveModels",
+      "Effect": "Deny",
+      "Action": [
+        "bedrock:CreateModelCustomizationJob",
+        "bedrock:StopModelCustomizationJob",
+        "bedrock:CreateProvisionedModelThroughput",
+        "bedrock:UpdateProvisionedModelThroughput",
+        "bedrock:DeleteProvisionedModelThroughput",
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-opus*",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-2*",
+        "arn:aws:bedrock:*::foundation-model/amazon.titan-embed*"
+      ]
+    },
+    {
+      "Sid": "DenyCostlyServicesEntirely",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "ec2:StartInstances",
+        "redshift:*",
+        "rds:*",
+        "elasticmapreduce:*",
+        "kinesis:*",
+        "firehose:*",
+        "es:*",
+        "opensearch:*",
+        "ecs:*",
+        "eks:*",
+        "glue:CreateDevEndpoint",
+        "glue:UpdateDevEndpoint",
+        "lambda:CreateFunction",
+        "lambda:UpdateFunctionCode",
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

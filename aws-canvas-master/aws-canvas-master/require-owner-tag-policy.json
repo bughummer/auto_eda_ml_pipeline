@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RequireOwnerTagOnSageMaker",
+      "Effect": "Deny",
+      "Action": [
+        "sagemaker:CreateTrainingJob",
+        "sagemaker:CreateProcessingJob",
+        "sagemaker:CreateAutoMLJob",
+        "sagemaker:CreateTransformJob",
+        "sagemaker:CreateNotebookInstance"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestTag/Owner": "${aws:username}"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowChangeOwnPassword",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ChangePassword",
+        "iam:GetAccountPasswordPolicy"
+      ],
+      "Resource": "arn:aws:iam::*:user/${aws:username}"
+    },
+    {
+      "Sid": "AllowCanvasConsoleAccess",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:ListDomains",
+        "sagemaker:DescribeDomain",
+        "sagemaker:ListUserProfiles",
+        "sagemaker:DescribeUserProfile",
+        "sagemaker:ListApps",
+        "sagemaker:DescribeApp",
+        "sagemaker:CreateApp",
+        "sagemaker:DeleteApp"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowPresignedUrlVasif",
+      "Effect": "Allow",
+      "Action": "sagemaker:CreatePresignedDomainUrl",
+      "Resource": "arn:aws:sagemaker:us-east-1:857753985214:user-profile/d-yxvamwlr1iei/Vasif-test-user",
+      "Condition": {
+        "StringEquals": {
+          "aws:username": "Vasif_test_user"
+        }
+      }
+    },
+    {
+      "Sid": "AllowPresignedUrlAghamir",
+      "Effect": "Allow",
+      "Action": "sagemaker:CreatePresignedDomainUrl",
+      "Resource": "arn:aws:sagemaker:us-east-1:857753985214:user-profile/d-yxvamwlr1iei/Aghamir-test-user",
+      "Condition": {
+        "StringEquals": {
+          "aws:username": "Aghamir_test_user"
+        }
+      }
+    },
+    {
+      "Sid": "AllowPresignedUrlMurad",
+      "Effect": "Allow",
+      "Action": "sagemaker:CreatePresignedDomainUrl",
+      "Resource": "arn:aws:sagemaker:us-east-1:857753985214:user-profile/d-yxvamwlr1iei/Murad-test-user",
+      "Condition": {
+        "StringEquals": {
+          "aws:username": "Murad_test_user"
+        }
+      }
+    },
+    {
+      "Sid": "AllowCanvasAutoML",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateAutoMLJob",
+        "sagemaker:CreateAutoMLJobV2",
+        "sagemaker:DescribeAutoMLJob",
+        "sagemaker:DescribeAutoMLJobV2",
+        "sagemaker:ListAutoMLJobs",
+        "sagemaker:StopAutoMLJob",
+        "sagemaker:ListCandidatesForAutoMLJob"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowCanvasReadJobs",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:DescribeTrainingJob",
+        "sagemaker:ListTrainingJobs",
+        "sagemaker:DescribeProcessingJob",
+        "sagemaker:ListProcessingJobs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowS3ObjectAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:ListBucketMultipartUploads"
+      ],
+      "Resource": [
+        "arn:aws:s3:::canvas-datasets-vorujzada",
+        "arn:aws:s3:::canvas-datasets-vorujzada/*",
+        "arn:aws:s3:::sagemaker-us-east-1-857753985214",
+        "arn:aws:s3:::sagemaker-us-east-1-857753985214/*",
+        "arn:aws:s3:::azc-ml-prj-*",
+        "arn:aws:s3:::azc-ml-prj-*/*"
+      ]
+    },
+    {
+      "Sid": "AllowS3CreateProjectBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketTagging",
+        "s3:GetBucketTagging",
+        "s3:PutBucketVersioning",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": "arn:aws:s3:::azc-ml-prj-*"
+    },
+    {
+      "Sid": "AllowS3ListBuckets",
+      "Effect": "Allow",
+      "Action": "s3:ListAllMyBuckets",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowPassRoleToSageMaker",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "iam:ListRoles",
+        "iam:GetRole"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "sagemaker.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "AllowConsoleUIBasics",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:ListTags",
+        "sagemaker:AddTags",
+        "sagemaker:GetSagemakerServicecatalogPortfolioStatus"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowInvokeRetrainLambda",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:857753985214:function:CanvasAutoRetrain"
+    },
+    {
+      "Sid": "AllowCloudWatchDashboard",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetDashboard",
+        "cloudwatch:ListDashboards",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarms"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

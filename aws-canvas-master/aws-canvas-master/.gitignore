@@ -1,0 +1,10 @@
+# AWS CLI installation
+aws/
+awscliv2.zip
+
+# Lambda zip artifacts
+*.zip
+
+# Temp files
+__pycache__/
+*.pyc

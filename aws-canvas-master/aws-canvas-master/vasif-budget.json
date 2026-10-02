@@ -1,0 +1,9 @@
+{
+  "BudgetName": "VasifBudget",
+  "BudgetLimit": {
+    "Amount": "100.0",
+    "Unit": "USD"
+  },
+  "TimeUnit": "MONTHLY",
+  "BudgetType": "COST"
+}

@@ -1,0 +1,10 @@
+{
+  "source": ["aws.sagemaker"],
+  "detail-type": [
+    "SageMaker Training Job State Change",
+    "SageMaker Processing Job State Change",
+    "SageMaker AutoML Job State Change",
+    "SageMaker AutoML Job V2 State Change",
+    "SageMaker Transform Job State Change"
+  ]
+}

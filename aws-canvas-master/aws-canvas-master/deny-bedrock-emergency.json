@@ -1,0 +1,19 @@
+﻿{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+                "bedrock:Converse",
+                "bedrock:ConverseStream",
+                "bedrock:InvokeAgent",
+                "bedrock:InvokeFlow",
+                "bedrock:Retrieve",
+                "bedrock:RetrieveAndGenerate"
+            ],
+            "Resource": "*",
+            "Effect": "Deny"
+        }
+    ]
+}
